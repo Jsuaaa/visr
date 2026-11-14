@@ -1,0 +1,25 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      # Installs the channel, components and targets pinned in rust-toolchain.toml.
+      - run: rustup toolchain install
+      # Temporary guards: there is no workspace until the first crate lands.
+      - if: hashFiles('Cargo.toml') != ''
+        uses: Swatinem/rust-cache@v2
+      - if: hashFiles('Cargo.toml') != ''
+        run: cargo fmt --all --check
+      - if: hashFiles('Cargo.toml') != ''
+        run: cargo clippy --workspace --all-targets -- -D warnings
