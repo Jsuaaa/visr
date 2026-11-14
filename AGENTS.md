@@ -133,7 +133,8 @@ also polished: a rough edge in something people look at all day is a bug, not a 
 - Nothing jumps. Layout doesn't shift when content loads, a hover appears or a label changes
   length. Space for a badge, a spinner or a status is reserved before it shows.
 - No flashes. The theme is loaded before the first frame, so the window never shows a default
-  color first. Switching themes repaints in one frame.
+  color first. Switching themes, by hand or when the system appearance changes, repaints in one
+  frame.
 - Every state is designed: hover, pressed, focus, disabled, selected, empty, loading and error.
   Nothing falls back to an unstyled default.
 - Motion is short and purposeful, and only explains a change (something opened, moved or
@@ -147,7 +148,9 @@ Visr's look is fully driven by themes. A theme is a TOML file that sets every co
 chrome and for the terminals. Changing the theme never needs a rebuild.
 
 - The user's `config.toml` names the active theme: `theme = "tokyo_night"`. Without that line,
-  the built-in `default` theme is used.
+  the theme follows the system: `default` when the system appearance is dark and `default_light`
+  when it is light, and it switches live when the system changes. A theme the user names always
+  wins and does not follow the system.
 - `config` looks the name up in the user's themes folder (`<config dir>/themes/<name>.toml`)
   first, then in the built-in themes. A user file with a built-in's name replaces it.
 - A theme file has a `[meta]` table (`name`, `appearance = "dark" | "light"`), a `[ui]` table of
