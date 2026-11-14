@@ -3,6 +3,15 @@
 version = 4
 
 [[package]]
+name = "hc-client"
+version = "0.1.0"
+dependencies = [
+ "hc-proto",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "hc-proto"
 version = "0.1.0"
 dependencies = [
