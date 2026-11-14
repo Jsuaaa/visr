@@ -422,8 +422,9 @@ entry to `## [Unreleased]` in the same commit, under `Added`, `Changed`, `Deprec
 
 ## Releases
 
-1. From `dev`, open a branch `release/vX.Y.Z`. Bump `crates/app/Cargo.toml` and refresh the
-   lockfile with `cargo update -p visr --offline`. Only that one line of `Cargo.lock` may change.
+1. From `dev`, open a branch `release/vX.Y.Z`. Bump `[workspace.package].version` in the root
+   `Cargo.toml` and refresh the lockfile with `cargo update --workspace --offline`. Only the
+   `version` lines of the workspace crates in `Cargo.lock` may change.
    In `CHANGELOG.md`, rename `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`, open a new empty
    `## [Unreleased]` above it, and update the links.
 2. Commit `chore(release): bump visr to X.Y.Z`. While on 0.x, a `feat` since the last release
