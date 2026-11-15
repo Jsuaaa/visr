@@ -194,8 +194,6 @@ chrome and for the terminals. Changing the theme never needs a rebuild.
   parameter, not a sibling component.
 - Every interactive component draws all its states from tokens: default, hover, pressed, focused,
   disabled and, where it applies, selected. A state it can't show is a bug.
-- `crates/ui/examples/gallery.rs` shows every component in every variant and state, and switches
-  between the built-in themes. A new component or variant is added there in the same change.
 
 ### Interaction
 
@@ -311,8 +309,8 @@ chrome and for the terminals. Changing the theme never needs a rebuild.
   behavior isn't obvious from its name, gets a `///` comment: one or two plain sentences on what
   it is for, or why it's done this way, and what a caller has to know.
 - Comments explain _why_, never _what_ the next line does. Keep them true when the code changes.
-- **NEVER** commit commented-out code, `dbg!`, or stray `println!`/`eprintln!`. Example binaries
-  (`crates/*/examples/`) print their output, and that's fine.
+- **NEVER** commit commented-out code, `dbg!`, or stray `println!`/`eprintln!`.
+- Crates have no `examples/` directories.
 
 ## Security
 
@@ -456,7 +454,7 @@ platform. Adding real signing later only changes the release workflow.
       `// SAFETY:`
 - [ ] Every new module opens with a `//!` line, and new types and non-obvious functions have `///`
 - [ ] No hardcoded colors, no duplicated alignment literals, no styling outside `ui`'s tokens
-- [ ] New or changed components show every state, work from the keyboard, and are in the gallery
+- [ ] New or changed components show every state and work from the keyboard
 - [ ] Visual changes were checked in a dark and a light theme; theme format changes update every
       built-in theme and `docs/themes.md`
 - [ ] No commented-out code, `dbg!`, stray prints, emoji or secrets

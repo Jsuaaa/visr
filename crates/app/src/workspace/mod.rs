@@ -25,6 +25,12 @@ use hc_proto::types::{
   TerminalState,
 };
 use ui::motion::{self, Tween};
+use ui::tokens::{
+  DIVIDER_WIDTH, HEADER_PADDING, PANE_BORDER_WIDTH, PANE_CHROME_HEIGHT, PANE_CHROME_WIDTH,
+  PANE_EDGE, PANE_HEADER_HEIGHT, PANE_PADDING_BOTTOM, PANE_PADDING_LEFT, PANE_RADIUS, ROW_HEIGHT,
+  ROW_INSET, TITLEBAR_BUTTON, TITLEBAR_HEIGHT, TITLEBAR_NUDGE, TOGGLE_GAP, TOGGLE_LEFT, TOGGLE_TOP,
+  WINDOW_GAP,
+};
 
 mod actions;
 mod changes;
@@ -50,12 +56,12 @@ use sidebar::row_key;
 use theme::*;
 use toolbar::{TOOLBAR_HEIGHT, ToolbarMenu};
 
+use crate::SIDEBAR_WIDTH;
 use crate::connection::{Connection, LAYOUT_DOC, missed_snapshot, subscribe};
 use crate::editors::{self, Editor};
 use crate::input;
 use crate::terminal_view::{Output, PaneFocused, TerminalView, hsla};
 use crate::text_field::{FieldEvent, TextField};
-use crate::{SIDEBAR_WIDTH, TITLEBAR_HEIGHT};
 
 const RECONNECT_INTERVAL: Duration = Duration::from_secs(1);
 

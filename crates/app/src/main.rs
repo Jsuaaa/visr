@@ -26,11 +26,10 @@ use gpui::{
 };
 use setup::{Launch, Setup};
 use startup::{StartupError, startup_message};
+use ui::tokens::TRAFFIC_LIGHTS_TOP;
 use workspace::Workspace;
 
 const SIDEBAR_WIDTH: f32 = 220.0;
-/// Height of the strip the macOS traffic lights sit in, above the sidebar.
-const TITLEBAR_HEIGHT: f32 = 40.0;
 
 /// The default font ships inside the binary, so every machine renders the same without installing
 /// anything. Licensed under the SIL OFL 1.1: see assets/fonts/LICENSE.txt, and NOTICE.txt for the
@@ -71,7 +70,7 @@ fn main() {
           title: Some("Visr".into()),
           // Windows keeps its native title bar: drawing our own needs the caption buttons too.
           appears_transparent: cfg!(target_os = "macos"),
-          traffic_light_position: Some(point(px(14.0), px(workspace::theme::TRAFFIC_LIGHTS_TOP))),
+          traffic_light_position: Some(point(px(14.0), px(TRAFFIC_LIGHTS_TOP))),
         }),
         ..Default::default()
       };
