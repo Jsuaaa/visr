@@ -333,7 +333,10 @@ Every crate declares `license = "GPL-3.0-or-later"` through `license.workspace =
   header or notice is added to our files.
 - A new dependency, font, icon pack or other bundled asset must be under a license compatible with
   GPL-3.0-or-later: MIT, Apache-2.0, BSD-2/3-Clause, ISC, Zlib, Unicode-3.0 or OFL-1.1 (fonts
-  only). **NEVER** add GPL, LGPL, AGPL, MPL or unlicensed code without asking. Copying code from
+  only). Bundled assets (fonts, icon packs, images) may also be under CC0-1.0, CC-BY-4.0, the
+  Unlicense or Powerline's "Free License". Each asset keeps its license or notice file next to
+  it, which must also carry the attribution CC-BY-4.0 requires.
+  **NEVER** add GPL, LGPL, AGPL, MPL or unlicensed code without asking. Copying code from
   elsewhere counts too: keep its notice and note where it came from.
 
 ## Crate publishing

@@ -58,8 +58,9 @@ A change someone using visr can notice adds one short line to `## [Unreleased]` 
 
 Please discuss a new dependency in an issue before adding it. Prefer what is already in the tree.
 Every dependency, font and icon pack must be under a license compatible with GPL-3.0-or-later: MIT,
-Apache-2.0, BSD-2/3-Clause, ISC, Zlib, Unicode-3.0 or OFL-1.1 (fonts only). No GPL, LGPL, AGPL or
-MPL code.
+Apache-2.0, BSD-2/3-Clause, ISC, Zlib, Unicode-3.0 or OFL-1.1 (fonts only). Bundled assets may also
+be under CC0-1.0, CC-BY-4.0, the Unlicense or Powerline's "Free License", with their license or
+notice file kept next to them. No GPL, LGPL, AGPL or MPL code.
 
 ## Releases
 
