@@ -1,10 +1,10 @@
 ## Summary
 
-<!-- Briefly describe what this PR does and why. -->
+<!-- Why is this change needed and what does a person get out of it? One or two sentences. Link the issue if there is one. -->
 
 ## Changes
 
-<!-- Describe the changes introduced by this PR. -->
+<!-- One bullet per behavior change: lowercase, imperative, one line each. Describe behavior, not files. -->
 
 ## Breaking changes
 
