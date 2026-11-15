@@ -7,4 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Terminals from herdr-core in tabs and splits
+- Visr offers to install herdr-core when it is missing or out of date
+- File and changes panels for the active terminal's folder, updated when a command runs or finishes
+- Open a terminal's folder in an installed editor
+- Changes to `config.toml` apply when you return to the window or when an editor in a terminal closes
+
 [Unreleased]: https://github.com/atleugim/visr/commits/dev

@@ -1,0 +1,33 @@
+The bundled LilexNerdFontMono-*.ttf files are Lilex (see LICENSE.txt) patched with Nerd Fonts
+(their name tables read "Nerd Fonts 3.5.1"). The patcher's own license and the license of the Nerd
+Fonts project's fonts are in LICENSE-nerd-fonts.txt.
+
+The patch adds glyphs from the icon sets listed below. The section that follows is copied
+verbatim from Nerd Fonts' license audit:
+https://github.com/ryanoasis/nerd-fonts/blob/v3.5.1/license-audit.md
+(tag v3.5.1, commit b894ea7803af6aade63d60a4381e006098ec9c4d).
+
+-----------------------------------------------------------------------------
+
+## Glyph/icon sources
+
+| Project                                          | License         |
+| ------------------------------------------------ | ----------------|
+| Codicons                                         | CC BY 4.0       |
+| Devicons                                         | MIT             |
+| Font Awesome                                     | CC BY 4.0       |
+| Font Awesome Extension                           | MIT             |
+| Font Logos                                       | Unlicensed      |
+| IEC Power Symbols                                | MIT             |
+| Material Design Icons                            | Apache 2.0      |
+| Original Source (Seti-UI but modified)           | MIT             |
+| Octicons                                         | MIT             |
+| Pomicons                                         | SIL OFL 1.1     |
+| Powerline Extra Symbols                          | MIT             |
+| Powerline Symbols                                | Free License    |
+| Weather Icons                                    | SIL OFL 1.1     |
+
+### Additional notes
+
+* font awesome - we use the icons which are CC 4.0.
+* weather icons - project is unfortunately dead, but added the OFL license files to comply.

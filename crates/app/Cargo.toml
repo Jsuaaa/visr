@@ -1,0 +1,15 @@
+[package]
+name = "visr"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+app-state.workspace = true
+config.workspace = true
+gpui.workspace = true
+hc-client.workspace = true
+hc-proto.workspace = true
+serde_json.workspace = true
+term.workspace = true
