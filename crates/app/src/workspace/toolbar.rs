@@ -77,7 +77,7 @@ impl Workspace {
   pub(super) fn render_toolbar(&self, cx: &mut Context<Self>) -> Option<impl IntoElement> {
     self.layout.focused()?;
     let bounds = Rc::clone(&self.more_bounds);
-    let more = titlebar_button("toolbar-more")
+    let more = chrome_button("toolbar-more")
       .size(px(BUTTON_HEIGHT))
       .relative()
       .child(glyph_icon(ICON_ELLIPSIS))
@@ -101,7 +101,7 @@ impl Workspace {
                         glyph: (&'static str, f32),
                         label: &'static str,
                         cx: &mut Context<Self>| {
-      titlebar_button(id)
+      chrome_button(id)
         .w_auto()
         .h(px(BUTTON_HEIGHT))
         // The icon's box has room around its drawing and the text does not, so the icon side

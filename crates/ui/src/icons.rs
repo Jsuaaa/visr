@@ -1,24 +1,29 @@
 //! Icons drawn from boxes, strokes and glyphs, so they center like each other.
 
-use super::*;
+use gpui::{
+  AnyElement, Axis, Div, Hsla, IntoElement, MouseButton, Stateful, canvas, div, point, prelude::*,
+  px,
+};
+
+use crate::tokens::TITLEBAR_BUTTON;
 
 /// The bundled Nerd Font the glyph icons come from.
-pub(super) const ICON_FONT: &str = "Lilex Nerd Font Mono";
+pub const ICON_FONT: &str = "Lilex Nerd Font Mono";
 /// Material Design icons: diagonal arrows out to expand a pane, in to put it back.
-pub(super) const ICON_EXPAND: &str = "\u{f0616}";
-pub(super) const ICON_RESTORE: &str = "\u{f0615}";
+pub const ICON_EXPAND: &str = "\u{f0616}";
+pub const ICON_RESTORE: &str = "\u{f0615}";
 /// Each with the size that makes it look as big as the others: the glyphs fill their boxes
 /// differently.
-pub(super) const ICON_FILES: (&str, f32) = ("\u{ea83}", 19.0);
-pub(super) const ICON_SOURCE_CONTROL: (&str, f32) = ("\u{ea68}", 15.0);
-pub(super) const ICON_ELLIPSIS: (&str, f32) = ("\u{ea7c}", 19.0);
-pub(super) const ICON_FOLDER_OPENED: (&str, f32) = ("\u{eaf7}", 20.0);
-pub(super) const ICON_TERMINAL: (&str, f32) = ("\u{ea85}", 20.0);
+pub const ICON_FILES: (&str, f32) = ("\u{ea83}", 19.0);
+pub const ICON_SOURCE_CONTROL: (&str, f32) = ("\u{ea68}", 15.0);
+pub const ICON_ELLIPSIS: (&str, f32) = ("\u{ea7c}", 19.0);
+pub const ICON_FOLDER_OPENED: (&str, f32) = ("\u{eaf7}", 20.0);
+pub const ICON_TERMINAL: (&str, f32) = ("\u{ea85}", 20.0);
 /// For an editor without a logo of its own.
-pub(super) const ICON_CODE: (&str, f32) = ("\u{eac4}", 20.0);
+pub const ICON_CODE: (&str, f32) = ("\u{eac4}", 20.0);
 
 /// A codicon centered in a box of one size, so every toolbar icon sits in the same place.
-pub(super) fn glyph_icon((glyph, size): (&'static str, f32)) -> impl IntoElement {
+pub fn glyph_icon((glyph, size): (&'static str, f32)) -> impl IntoElement {
   div()
     .size(px(18.0))
     .overflow_hidden()
@@ -31,7 +36,7 @@ pub(super) fn glyph_icon((glyph, size): (&'static str, f32)) -> impl IntoElement
 }
 
 /// A small window outline cut in two along `axis`, drawn with boxes so it needs no icon font.
-pub(super) fn split_icon(axis: Axis, color: Hsla) -> AnyElement {
+pub fn split_icon(axis: Axis, color: Hsla) -> AnyElement {
   let line = div().bg(color);
   let line = match axis {
     Axis::Horizontal => line.w(px(1.0)).h_full(),
@@ -52,7 +57,7 @@ pub(super) fn split_icon(axis: Axis, color: Hsla) -> AnyElement {
 }
 
 /// A window with its left panel marked off: the sidebar.
-pub(super) fn sidebar_icon(color: Hsla) -> impl IntoElement {
+pub fn sidebar_icon(color: Hsla) -> impl IntoElement {
   div()
     .w(px(15.0))
     .h(px(12.0))
@@ -64,7 +69,9 @@ pub(super) fn sidebar_icon(color: Hsla) -> impl IntoElement {
     .child(div().w(px(4.0)).h_full().border_r_1().border_color(color))
 }
 
-pub(super) fn titlebar_button(id: &'static str) -> gpui::Stateful<gpui::Div> {
+/// A square button for the title bar and the toolbar, with its icon as the child. It fills with
+/// `hover_background` under the pointer. The caller sets the text color.
+pub fn titlebar_button(id: &'static str, hover_background: Hsla) -> Stateful<Div> {
   div()
     .id(id)
     .size(px(TITLEBAR_BUTTON))
@@ -73,14 +80,13 @@ pub(super) fn titlebar_button(id: &'static str) -> gpui::Stateful<gpui::Div> {
     .justify_center()
     .rounded_md()
     .cursor_pointer()
-    .text_color(rgb(DIM_TEXT))
-    .hover(|button| button.bg(rgb(ROW_HOVER_BG)))
+    .hover(move |button| button.bg(hover_background))
     // A quick second click is the button's, not a double click on the title bar.
     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
 }
 
 /// An X drawn as two strokes: a typed × sits below the middle in most fonts.
-pub(super) fn close_icon(color: Hsla) -> impl IntoElement {
+pub fn close_icon(color: Hsla) -> impl IntoElement {
   let size = 9.0;
   canvas(
     |_, _, _| {},
@@ -101,15 +107,8 @@ pub(super) fn close_icon(color: Hsla) -> impl IntoElement {
   .flex_none()
 }
 
-/// A double click on the title bar does what the system says: zoom the window by default.
-pub(super) fn on_titlebar_mouse_down(event: &MouseDownEvent, window: &mut Window, _cx: &mut App) {
-  if event.click_count == 2 {
-    window.titlebar_double_click();
-  }
-}
-
 /// Drawn rather than typed, so it centers exactly like the other icons.
-pub(super) fn plus_icon(color: Hsla) -> impl IntoElement {
+pub fn plus_icon(color: Hsla) -> impl IntoElement {
   let (size, stroke) = (12.0, 1.5);
   let middle = (size - stroke) / 2.0;
   div()
@@ -135,7 +134,15 @@ pub(super) fn plus_icon(color: Hsla) -> impl IntoElement {
     )
 }
 
-pub(super) fn shell_icon() -> impl IntoElement {
+/// The colors of a shell's icon.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ShellColors {
+  pub background: Hsla,
+  pub text: Hsla,
+}
+
+/// The `>_` of a terminal on a small tile.
+pub fn shell_icon(colors: ShellColors) -> impl IntoElement {
   div()
     .size(px(18.0))
     .flex_none()
@@ -143,37 +150,46 @@ pub(super) fn shell_icon() -> impl IntoElement {
     .items_center()
     .justify_center()
     .rounded_sm()
-    .bg(rgb(ICON_BG))
+    .bg(colors.background)
     .text_size(px(10.0))
-    .text_color(rgb(DIM_TEXT))
+    .text_color(colors.text)
     .child(">_")
 }
 
+/// The colors of a stack icon: the shell in front, the accent of the one behind it, and the
+/// outline that separates them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StackColors {
+  pub shell: ShellColors,
+  pub behind: Hsla,
+  pub outline: Hsla,
+}
+
 /// Two shells, one behind the other: a tab split into several panes.
-pub(super) fn stack_icon() -> AnyElement {
+pub fn stack_icon(colors: StackColors) -> AnyElement {
   let layer = || {
     div()
       .absolute()
       .size(px(15.0))
       .rounded_sm()
       .border_1()
-      .border_color(rgb(WINDOW_BG))
+      .border_color(colors.outline)
   };
   div()
     .relative()
     .size(px(18.0))
     .flex_none()
-    .child(layer().top_0().right_0().bg(rgb(PANE_BORDER_FOCUSED)))
+    .child(layer().top_0().right_0().bg(colors.behind))
     .child(
       layer()
         .bottom_0()
         .left_0()
-        .bg(rgb(ICON_BG))
+        .bg(colors.shell.background)
         .flex()
         .items_center()
         .justify_center()
         .text_size(px(9.0))
-        .text_color(rgb(DIM_TEXT))
+        .text_color(colors.shell.text)
         .child(">_"),
     )
     .into_any_element()

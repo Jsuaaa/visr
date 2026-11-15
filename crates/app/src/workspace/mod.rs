@@ -24,6 +24,11 @@ use hc_proto::types::{
   Change, RemoveResult, RunParams, Size, SubscribeResult, TemplateInfo, Terminal, TerminalParams,
   TerminalState,
 };
+use ui::icons::{
+  ICON_CODE, ICON_ELLIPSIS, ICON_EXPAND, ICON_FILES, ICON_FOLDER_OPENED, ICON_FONT, ICON_RESTORE,
+  ICON_SOURCE_CONTROL, ICON_TERMINAL, ShellColors, StackColors, close_icon, glyph_icon, plus_icon,
+  shell_icon, sidebar_icon, split_icon, stack_icon, titlebar_button,
+};
 use ui::motion::{self, Tween};
 use ui::tokens::{
   DIVIDER_WIDTH, HEADER_PADDING, PANE_BORDER_WIDTH, PANE_CHROME_HEIGHT, PANE_CHROME_WIDTH,
@@ -35,7 +40,6 @@ use ui::tokens::{
 mod actions;
 mod changes;
 mod files;
-mod icons;
 mod menu;
 mod panel;
 mod panes;
@@ -48,7 +52,6 @@ pub(crate) mod theme;
 mod toolbar;
 
 use changes::GitView;
-use icons::*;
 use menu::{menu_item, menu_item_icon, menu_separator};
 use panel::{OutputLook, PANEL_WIDTH, Panel, PanelSwitch, TreeState};
 use resize::{Edge, EdgeDrag};
@@ -361,5 +364,17 @@ impl Workspace {
     self.save();
     self.note_focus(cx);
     cx.notify();
+  }
+}
+
+/// A title bar or toolbar button in the workspace's colors.
+fn chrome_button(id: &'static str) -> gpui::Stateful<gpui::Div> {
+  titlebar_button(id, rgb(ROW_HOVER_BG).into()).text_color(rgb(DIM_TEXT))
+}
+
+/// A double click on the title bar does what the system says: zoom the window by default.
+fn on_titlebar_mouse_down(event: &MouseDownEvent, window: &mut Window, _cx: &mut App) {
+  if event.click_count == 2 {
+    window.titlebar_double_click();
   }
 }

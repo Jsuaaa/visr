@@ -232,9 +232,13 @@ impl Workspace {
       .find(|urgent| dots.contains(urgent))
       .unwrap_or(Indicator::Quiet);
     let icon = if members.len() > 1 {
-      stack_icon()
+      stack_icon(StackColors {
+        shell: shell_colors(),
+        behind: rgb(PANE_BORDER_FOCUSED).into(),
+        outline: rgb(WINDOW_BG).into(),
+      })
     } else {
-      shell_icon().into_any_element()
+      shell_icon(shell_colors()).into_any_element()
     };
     let content = SidebarRow {
       row: members
@@ -264,7 +268,7 @@ impl Workspace {
     let is_live = terminal.state == TerminalState::Live;
     let content = SidebarRow {
       row: address.clone(),
-      icon: shell_icon().into_any_element(),
+      icon: shell_icon(shell_colors()).into_any_element(),
       name: entry_label(&self.layout, &self.terminals, entry),
       dot: indicator(terminal),
       is_active: false,
@@ -370,7 +374,7 @@ impl Workspace {
   }
 
   pub(super) fn sidebar_toggle(&self, cx: &mut Context<Self>) -> impl IntoElement {
-    titlebar_button("toggle-sidebar")
+    chrome_button("toggle-sidebar")
       .child(sidebar_icon(rgb(DIM_TEXT).into()))
       .on_click(cx.listener(|workspace, _, _, cx| {
         workspace.toggle_sidebar();
@@ -380,7 +384,7 @@ impl Workspace {
 
   /// Starts a shell. It belongs to the sidebar and goes with it.
   fn new_shell_button(&self, cx: &mut Context<Self>) -> impl IntoElement {
-    titlebar_button("new-shell")
+    chrome_button("new-shell")
       .child(plus_icon(rgb(DIM_TEXT).into()))
       .on_click(cx.listener(|workspace, _, window, cx| {
         workspace.run_action(Action::NewTab, window, cx);
@@ -480,5 +484,13 @@ impl Workspace {
           .children(rows)
           .children(templates),
       )
+  }
+}
+
+/// The colors of a shell's icon in the sidebar.
+fn shell_colors() -> ShellColors {
+  ShellColors {
+    background: rgb(ICON_BG).into(),
+    text: rgb(DIM_TEXT).into(),
   }
 }

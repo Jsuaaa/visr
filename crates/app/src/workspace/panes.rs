@@ -258,13 +258,13 @@ impl Workspace {
       .child(self.pane_button(
         address,
         Action::SplitRight,
-        split_icon(Axis::Horizontal, dim),
+        split_icon(gpui::Axis::Horizontal, dim),
         cx,
       ))
       .child(self.pane_button(
         address,
         Action::SplitDown,
-        split_icon(Axis::Vertical, dim),
+        split_icon(gpui::Axis::Vertical, dim),
         cx,
       ))
       .children(zoom_button)

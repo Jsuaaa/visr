@@ -5785,6 +5785,9 @@ dependencies = [
 [[package]]
 name = "ui"
 version = "0.1.0"
+dependencies = [
+ "gpui",
+]
 
 [[package]]
 name = "unicase"
