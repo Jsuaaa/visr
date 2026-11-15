@@ -1,0 +1,58 @@
+# A pull request gets the label of each part of the repository it touches. A path that maps to no
+# area gets no label. The labeler workflow owns these labels (sync-labels), so it also removes one
+# when its files are no longer part of the PR.
+
+ui:
+  - changed-files:
+      - any-glob-to-any-file: crates/ui/**
+
+app:
+  - changed-files:
+      - any-glob-to-any-file: crates/app/**
+
+app-state:
+  - changed-files:
+      - any-glob-to-any-file: crates/app-state/**
+
+theme:
+  - changed-files:
+      - any-glob-to-any-file: crates/theme/**
+
+config:
+  - changed-files:
+      - any-glob-to-any-file: crates/config/**
+
+term:
+  - changed-files:
+      - any-glob-to-any-file: crates/term/**
+
+hc-client:
+  - changed-files:
+      - any-glob-to-any-file: crates/hc-client/**
+
+hc-proto:
+  - changed-files:
+      - any-glob-to-any-file: crates/hc-proto/**
+
+build:
+  - changed-files:
+      - any-glob-to-any-file:
+          - scripts/**
+          - packaging/**
+          - Cargo.toml
+          - Cargo.lock
+          - rust-toolchain.toml
+          - rustfmt.toml
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file: .github/**
+
+docs:
+  - changed-files:
+      - any-glob-to-any-file:
+          - README.md
+          - docs/**
+          - CONTRIBUTING.md
+          - AGENTS.md
+          - LICENSE

@@ -2,16 +2,6 @@
 
 <!-- Briefly describe what this PR does and why. -->
 
-## Type of change
-
-- [ ] Feature
-- [ ] Bug fix
-- [ ] Refactoring
-- [ ] Performance improvement
-- [ ] Documentation
-- [ ] Maintenance
-- [ ] Other
-
 ## Changes
 
 <!-- Describe the changes introduced by this PR. -->
