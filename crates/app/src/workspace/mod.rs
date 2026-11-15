@@ -42,6 +42,7 @@ use ui::tokens::{
 
 mod actions;
 mod changes;
+mod config_watch;
 mod files;
 mod panel;
 mod panes;
@@ -53,6 +54,7 @@ mod sidebar;
 mod toolbar;
 
 use changes::GitView;
+use config_watch::ConfigWatch;
 use panel::{OutputLook, PANEL_WIDTH, Panel, PanelSwitch, TreeState};
 use resize::{Edge, EdgeDrag};
 use sidebar::row_key;
@@ -203,6 +205,8 @@ pub(crate) struct Workspace {
   _config_check: Option<Task<()>>,
   /// The theme file being read for a reload; a newer one replaces it.
   _theme_reload: Option<Task<()>>,
+  /// Looks at the config file whenever it changes on disk.
+  _config_watch: Option<ConfigWatch>,
   /// Looks at the config file whenever the window becomes active.
   _activation: Subscription,
   /// Switches between the built-in themes when the system appearance changes.
@@ -346,6 +350,7 @@ impl Workspace {
       config_seen: ConfigSeen::NotYet,
       _config_check: None,
       _theme_reload: None,
+      _config_watch: Self::watch_config(window, cx),
       _activation: activation,
       _appearance: appearance,
       editors: editors::installed(),

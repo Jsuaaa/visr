@@ -13,7 +13,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Visr offers to install herdr-core when it is missing or out of date
 - File and changes panels for the active terminal's folder, updated when a command runs or finishes
 - Open a terminal's folder in an installed editor
-- Changes to `config.toml` apply when you return to the window or when an editor in a terminal closes
+- Changes to `config.toml`, including the `theme` line, apply as soon as you save it
 - Dark and light built-in themes that follow the system appearance, and a `theme` setting in `config.toml` to pick one
 - Reload the theme with a shortcut, so edits to its file show without a restart
 - Your own themes in the `themes` folder next to `config.toml`

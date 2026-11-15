@@ -24,12 +24,12 @@ The built-in themes are `default` (dark) and `default_light` (light).
 
 ### Applying changes
 
-Visr does not watch theme files. After editing a theme file, press the `reload_theme` shortcut.
-By default it is `cmd-shift-r` on macOS and `ctrl-shift-r` elsewhere, and `reload_theme` under
-`[keys]` in `config.toml` changes it. Visr reads `config.toml` again when its window becomes
-active, or when a program run in one of its terminals ends (an editor that saved the file, for
-example). After changing the `theme` line, press the shortcut once to apply it, or
-restart Visr. While no `theme` line is set, the system appearance is followed on its own.
+Visr reads `config.toml` again as soon as it is saved (or, if Visr could not watch its folder,
+when the window becomes active), and a changed `theme` line applies then. Visr does not watch the
+files in `themes/`. After editing a theme file, press the `reload_theme` shortcut. By default it is
+`cmd-shift-r` on macOS and `ctrl-shift-r` elsewhere, and `reload_theme` under `[keys]` in
+`config.toml` changes it. While no `theme` line is set, the system appearance is followed on its
+own.
 
 ## The file
 

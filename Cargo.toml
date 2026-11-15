@@ -20,3 +20,4 @@ term = { path = "crates/term" }
 theme = { path = "crates/theme" }
 ui = { path = "crates/ui" }
 toml = "1.2.1"
+notify = "8.2.2"

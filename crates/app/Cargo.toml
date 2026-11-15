@@ -11,6 +11,7 @@ config.workspace = true
 gpui.workspace = true
 hc-client.workspace = true
 hc-proto.workspace = true
+notify.workspace = true
 serde_json.workspace = true
 term.workspace = true
 theme.workspace = true

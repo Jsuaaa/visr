@@ -1,6 +1,6 @@
-//! Applying `config.toml` while the app runs. There is no watcher and no timer: the file is looked
-//! at when the window becomes active, and when a terminal's program finishes (an editor run in a
-//! pane ends), each look reading the file's modification time off the UI thread.
+//! Applying `config.toml` while the app runs. There is no timer: the file is looked at when it
+//! changes on disk, when the window becomes active, and when a terminal's program finishes (an
+//! editor run in a pane ends), each look reading the file's modification time off the UI thread.
 
 use std::path::Path;
 
@@ -47,6 +47,7 @@ impl Workspace {
             .view
             .update(cx, |view, cx| view.set_config(&self.config, window, cx));
         }
+        self.reload_theme(window, cx);
       }
       Err(error) => self.config_error = Some(error.to_string()),
     }
