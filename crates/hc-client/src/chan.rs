@@ -12,6 +12,8 @@ use std::task::{Poll, Waker};
 #[derive(Debug, PartialEq, Eq)]
 pub struct Closed;
 
+/// What the sender and receiver share under the lock: queued values, the waiting task and the
+/// closed flag.
 struct State<T> {
   queue: VecDeque<T>,
   /// Whoever is awaiting the next value.
@@ -19,6 +21,7 @@ struct State<T> {
   closed: bool,
 }
 
+/// The state behind both ends of the channel, with the condvar a blocked thread waits on.
 struct Shared<T> {
   state: Mutex<State<T>>,
   ready: Condvar,

@@ -72,6 +72,7 @@ impl From<serde_json::Error> for Error {
   }
 }
 
+/// What the reader thread hands to a channel slot: output bytes, or the end of the channel.
 enum ChannelMessage {
   Data(Vec<u8>),
   Closed,
@@ -95,6 +96,8 @@ impl Slot {
   }
 }
 
+/// What the client tracks for the connection: calls awaiting a response, channel slots and
+/// whether the connection has dropped.
 #[derive(Default)]
 struct State {
   pending: HashMap<u64, Sender<Result<Value, RpcError>>>,
@@ -102,6 +105,7 @@ struct State {
   disconnected: bool,
 }
 
+/// What the caller side and the reader thread share: the writer and the connection state.
 struct Shared {
   writer: Mutex<Box<dyn Write + Send>>,
   state: Mutex<State>,
