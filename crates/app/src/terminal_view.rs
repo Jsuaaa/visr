@@ -234,6 +234,12 @@ impl TerminalView {
     cx.notify();
   }
 
+  /// A new theme's palette; the screen draws with it from the next frame.
+  pub(crate) fn set_palette(&mut self, palette: Palette, cx: &mut Context<Self>) {
+    self.palette = palette;
+    cx.notify();
+  }
+
   pub(crate) fn copy(&self, cx: &mut Context<Self>) {
     if let Some(text) = self.screen.selected_text() {
       cx.write_to_clipboard(ClipboardItem::new_string(text));

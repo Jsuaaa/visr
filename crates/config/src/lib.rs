@@ -286,6 +286,7 @@ pub enum Action {
   ZoomPane,
   Copy,
   Paste,
+  ReloadTheme,
 }
 
 fn action_named(name: &str) -> Option<Action> {
@@ -303,6 +304,7 @@ fn action_named(name: &str) -> Option<Action> {
     "zoom_pane" => Action::ZoomPane,
     "copy" => Action::Copy,
     "paste" => Action::Paste,
+    "reload_theme" => Action::ReloadTheme,
     _ => match name.strip_prefix("select_tab_")?.parse() {
       Ok(tab @ 1..=9) => Action::SelectTab(tab - 1),
       _ => return None,

@@ -127,7 +127,7 @@ fn main() {
 }
 
 /// Which built-in theme the system appearance asks for when `config.toml` names none.
-fn system_appearance(appearance: WindowAppearance) -> Appearance {
+pub(crate) fn system_appearance(appearance: WindowAppearance) -> Appearance {
   match appearance {
     WindowAppearance::Light | WindowAppearance::VibrantLight => Appearance::Light,
     WindowAppearance::Dark | WindowAppearance::VibrantDark => Appearance::Dark,

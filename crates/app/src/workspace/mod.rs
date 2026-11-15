@@ -13,7 +13,7 @@ use app_state::{
   Entry, Indicator, Terminals, clean_exits, display_name, entry_label, indicator, panes_to_close,
   sidebar_entries,
 };
-use config::{Action, Config, KeyPress};
+use config::{Action, Config, KeyPress, LoadedTheme, ThemeChoice};
 use gpui::{
   AnyElement, App, Bounds, Context, Entity, FocusHandle, Hsla, KeyDownEvent, MouseButton,
   MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point, SharedString, Subscription, Task,
@@ -62,6 +62,7 @@ use crate::SIDEBAR_WIDTH;
 use crate::connection::{Connection, LAYOUT_DOC, missed_snapshot, subscribe};
 use crate::editors::{self, Editor};
 use crate::input;
+use crate::system_appearance;
 use crate::terminal_view::{Output, PaneFocused, TerminalColors, TerminalView, hsla};
 
 const RECONNECT_INTERVAL: Duration = Duration::from_secs(1);
@@ -200,8 +201,12 @@ pub(crate) struct Workspace {
   config_seen: ConfigSeen,
   /// The look at the config file in flight; a newer one replaces it.
   _config_check: Option<Task<()>>,
+  /// The theme file being read for a reload; a newer one replaces it.
+  _theme_reload: Option<Task<()>>,
   /// Looks at the config file whenever the window becomes active.
   _activation: Subscription,
+  /// Switches between the built-in themes when the system appearance changes.
+  _appearance: Subscription,
   _tasks: Vec<Task<()>>,
 }
 
@@ -285,6 +290,10 @@ impl Workspace {
       }
     });
 
+    let appearance = cx.observe_window_appearance(window, |workspace, window, cx| {
+      workspace.follow_system_appearance(window, cx);
+    });
+
     let live: Vec<&str> = snapshot
       .terminals
       .iter()
@@ -336,7 +345,9 @@ impl Workspace {
       listing_tasks: HashMap::new(),
       config_seen: ConfigSeen::NotYet,
       _config_check: None,
+      _theme_reload: None,
       _activation: activation,
+      _appearance: appearance,
       editors: editors::installed(),
       renaming: None,
       sidebar_open: true,
@@ -357,7 +368,52 @@ impl Workspace {
     workspace.remove_clean_exits();
     workspace.changed(window, cx);
     workspace.check_config(window, cx);
+    workspace.follow_system_appearance(window, cx);
     workspace
+  }
+
+  /// With no theme named in `config.toml`, swaps both built-in themes in at once: the globals
+  /// first, then every open terminal's palette, then a single repaint.
+  fn follow_system_appearance(&mut self, window: &Window, cx: &mut Context<Self>) {
+    if self.config.theme != ThemeChoice::System {
+      return;
+    }
+    let theme = theme::default_theme(system_appearance(window.appearance())).theme;
+    self.apply_theme(&theme, cx);
+  }
+
+  /// Reads the configured theme again off the UI thread, so edits to its file show without a
+  /// restart. Issues are shown in the banner, which a clean load clears.
+  ///
+  /// Uses the theme named by the config last applied in memory, not a fresh read of `config.toml`,
+  /// so a press before the window's config check finishes reloads the previous choice.
+  fn reload_theme(&mut self, window: &Window, cx: &mut Context<Self>) {
+    let choice = self.config.theme.clone();
+    let system = system_appearance(window.appearance());
+    self._theme_reload = Some(cx.spawn(async move |this, cx| {
+      let loaded = cx
+        .background_executor()
+        .spawn(async move { LoadedTheme::load(&choice, system, &config::themes_dir()) })
+        .await;
+      let _ = this.update(cx, |workspace, cx| {
+        workspace.theme_notice =
+          (!loaded.messages.is_empty()).then(|| loaded.messages.join("\n").into());
+        workspace.apply_theme(&loaded.theme, cx);
+      });
+    }));
+  }
+
+  /// Installs `theme` for the chrome and every terminal, and repaints once.
+  fn apply_theme(&mut self, theme: &theme::Theme, cx: &mut Context<Self>) {
+    ui::colors::install(&theme.ui, cx);
+    cx.set_global(TerminalColors::new(&theme.terminal));
+    let palette = TerminalColors::palette(cx);
+    for pane in self.panes.values() {
+      pane
+        .view
+        .update(cx, |view, cx| view.set_palette(palette.clone(), cx));
+    }
+    cx.notify();
   }
 
   /// After any layout change: save it, match the panes to the active tab, focus the right one.

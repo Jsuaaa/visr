@@ -94,6 +94,10 @@ impl Workspace {
         }
         return;
       }
+      Action::ReloadTheme => {
+        self.reload_theme(window, cx);
+        return;
+      }
       Action::NewTab => {
         self.open_tab(Vec::new(), None, cx);
       }
