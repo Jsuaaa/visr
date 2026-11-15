@@ -1,0 +1,43 @@
+[meta]
+name = "Default"
+appearance = "dark"
+
+[ui]
+surface = "#141516"
+surface_hover = "#222427"
+surface_active = "#2a2d31"
+surface_hover_strong = "#3a3d42"
+surface_raised = "#232528"
+surface_raised_hover = "#34373b"
+surface_sunken = "#1c1e21"
+surface_error = "#5c2b2b"
+border = "#2a2c2f"
+border_focused = "#44484d"
+border_snapped = "#3b82f6"
+text = "#c5c8c6"
+text_muted = "#808080"
+text_secondary = "#909090"
+text_link = "#7aa2f7"
+text_warning = "#e2a04a"
+selection = "#373b41"
+button_primary = "#3b6fd4"
+git_modified = "#e2c08d"
+git_added = "#81b88b"
+git_deleted = "#c74e39"
+git_untracked = "#73c991"
+git_conflict = "#e4676b"
+status_quiet = "#666666"
+status_working = "#f0c674"
+status_blocked = "#cc6666"
+status_done = "#b5bd68"
+status_exited = "#373b41"
+
+[terminal]
+foreground = "#c5c8c6"
+background = "#1d1f21"
+cursor = "#c5c8c6"
+selection = "#373b41"
+ansi = [
+  "#1d1f21", "#cc6666", "#b5bd68", "#f0c674", "#81a2be", "#b294bb", "#8abeb7", "#c5c8c6",
+  "#666666", "#d54e53", "#b9ca4a", "#e7c547", "#7aa6da", "#c397d8", "#70c0b1", "#eaeaea",
+]
