@@ -3,7 +3,9 @@
 use std::ops::Range;
 use std::path::PathBuf;
 
-use crate::{file_icons, tree};
+use ui::file_icons;
+
+use crate::tree;
 
 use super::panel::panel_frame;
 use super::*;

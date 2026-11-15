@@ -1,6 +1,7 @@
 //! The right panel listing the files git sees changed where the active terminal is.
 
-use crate::file_icons;
+use ui::file_icons;
+
 use crate::git::{self, Change, Status};
 
 use super::panel::{count_pill, panel_frame};

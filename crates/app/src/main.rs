@@ -3,10 +3,10 @@
 // Release builds on Windows open no console window next to the app.
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
+mod assets;
 mod connection;
 mod edit;
 mod editors;
-mod file_icons;
 mod git;
 mod input;
 mod setup;
@@ -51,7 +51,7 @@ fn main() {
   };
 
   Application::new()
-    .with_assets(file_icons::Assets)
+    .with_assets(assets::Assets)
     .run(move |cx: &mut App| {
       let fonts = FONTS.iter().map(|font| Cow::Borrowed(*font)).collect();
       cx.text_system()
