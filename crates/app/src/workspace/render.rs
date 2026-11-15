@@ -136,7 +136,7 @@ impl Render for Workspace {
       .flex()
       .size_full()
       .bg(rgb(WINDOW_BG))
-      .text_color(hsla(self.config.palette.foreground))
+      .text_color(hsla(Palette::default().foreground))
       .when(shown > 0.0, |root| {
         root.child(
           div()

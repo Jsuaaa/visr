@@ -490,13 +490,6 @@ impl Setup {
       Retry::Connect => self.connect(window, cx),
     }
   }
-
-  fn palette(&self) -> term::palette::Palette {
-    match &self.launch {
-      Some(launch) => launch.config.palette.clone(),
-      None => Config::defaults().palette,
-    }
-  }
 }
 
 fn button(id: &'static str, label: &str, primary: bool) -> Stateful<gpui::Div> {
@@ -576,7 +569,7 @@ impl Render for Setup {
     {
       window.focus(&self.focus_handle);
     }
-    let palette = self.palette();
+    let palette = term::palette::Palette::default();
     let dim = gpui::rgb(SETUP_DIM);
     let heading = |text: &str| div().text_size(px(20.0)).child(text.to_string());
     let paragraph = |text: &str| div().text_color(dim).child(text.to_string());

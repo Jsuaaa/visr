@@ -286,7 +286,7 @@ impl Workspace {
       .pr_1()
       .text_size(px(13.0))
       .text_color(if is_focused {
-        hsla(self.config.palette.foreground)
+        hsla(Palette::default().foreground)
       } else {
         dim
       })
@@ -316,7 +316,7 @@ impl Workspace {
       } else {
         PANE_BORDER
       }))
-      .bg(hsla(self.config.palette.background))
+      .bg(hsla(Palette::default().background))
       .when(!zoomed, |card| {
         card.relative().child(self.measure_pane(address))
       })

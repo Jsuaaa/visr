@@ -1,13 +1,12 @@
-//! The user's look and keys: built-in defaults with an optional TOML file on top, so the same
-//! file gives the same app on every machine.
+//! The user's font, theme choice and keys: built-in defaults with an optional TOML file on top, so
+//! the same file gives the same app on every machine.
 
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
-use term::palette::Palette;
-use term::render::Rgb;
+use theme::{Appearance, Theme};
 use toml::{Table, Value};
 
 const COMMON_DEFAULTS: &str = include_str!("../defaults/common.toml");
@@ -28,12 +27,21 @@ impl fmt::Display for ConfigError {
 
 impl std::error::Error for ConfigError {}
 
-/// The settings Visr runs with: font, terminal palette and keybindings.
+/// The settings Visr runs with: font, which theme to use and keybindings.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Config {
   pub font: FontConfig,
-  pub palette: Palette,
+  pub theme: ThemeChoice,
   pub keys: Keymap,
+}
+
+/// Which theme the user asked for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ThemeChoice {
+  /// No `theme` line: follow the system appearance.
+  System,
+  /// The theme named in `config.toml`, whatever the system appearance is.
+  Named(String),
 }
 
 /// The terminal font. Sizes are in logical pixels.
@@ -45,24 +53,13 @@ pub struct FontConfig {
   pub line_height: f32,
 }
 
-/// The merged TOML as read, before colors and bindings are checked.
+/// The merged TOML as read, before bindings are checked.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct RawConfig {
   font: FontConfig,
-  theme: RawTheme,
+  theme: Option<String>,
   keys: BTreeMap<String, String>,
-}
-
-/// The `[theme]` table as written: colors are still `#rrggbb` text.
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct RawTheme {
-  foreground: String,
-  background: String,
-  cursor: String,
-  selection: String,
-  ansi: [String; 16],
 }
 
 impl Config {
@@ -87,7 +84,7 @@ impl Config {
       .map_err(|error| ConfigError(error.to_string()))?;
     Ok(Self {
       font: raw.font,
-      palette: palette(&raw.theme)?,
+      theme: raw.theme.map_or(ThemeChoice::System, ThemeChoice::Named),
       keys: Keymap::from_names(&raw.keys, &user_keys)?,
     })
   }
@@ -115,6 +112,97 @@ pub fn config_path() -> PathBuf {
   base.unwrap_or_default().join("visr").join("config.toml")
 }
 
+/// The folder of the user's themes: `themes/` next to the config file.
+pub fn themes_dir() -> PathBuf {
+  config_path().with_file_name("themes")
+}
+
+/// A theme ready to draw with, and what the person should be told about how it was found.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LoadedTheme {
+  pub theme: Theme,
+  /// One entry per problem, in full sentences, some with a detail line after them. Empty when
+  /// the theme loaded cleanly.
+  pub messages: Vec<String>,
+}
+
+impl LoadedTheme {
+  /// Reads the theme `choice` asks for. `system` picks the built-in one for `ThemeChoice::System`.
+  ///
+  /// A named theme is looked up in `themes_dir` first, then among the built-ins. One that is
+  /// missing or can't be parsed gives `default` and a message. Reads a file, so keep it off the
+  /// render path.
+  pub fn load(choice: &ThemeChoice, system: Appearance, themes_dir: &Path) -> Self {
+    match choice {
+      ThemeChoice::System => Self::from_builtin(system),
+      ThemeChoice::Named(name) => Self::named(name, themes_dir),
+    }
+  }
+
+  fn named(name: &str, themes_dir: &Path) -> Self {
+    let path = themes_dir.join(format!("{name}.toml"));
+    let is_unusable_name = name.is_empty() || name.contains(['/', '\\']) || name.contains("..");
+    if is_unusable_name {
+      return Self::missing(name, themes_dir);
+    }
+    match std::fs::read_to_string(&path) {
+      Ok(text) => match theme::parse(&text) {
+        Ok(parsed) => Self::from_parsed(parsed, &path.display().to_string()),
+        Err(error) => Self::fallback(format!(
+          "The theme file {} is not valid TOML. Using the default theme.\n{error}",
+          path.display()
+        )),
+      },
+      Err(error) if error.kind() == std::io::ErrorKind::NotFound => match theme::builtin(name) {
+        Some(parsed) => Self::from_parsed(parsed, &format!("the built-in theme `{name}`")),
+        None => Self::missing(name, themes_dir),
+      },
+      Err(error) => Self::fallback(format!(
+        "The theme file {} can't be opened: {error}. Using the default theme.",
+        path.display()
+      )),
+    }
+  }
+
+  fn missing(name: &str, themes_dir: &Path) -> Self {
+    Self::fallback(format!(
+      "There is no theme called `{name}`: add it to {} or pick a built-in one. \
+       Using the default theme.",
+      themes_dir.display()
+    ))
+  }
+
+  /// A built-in theme, with its issues named after its own file.
+  fn from_builtin(appearance: Appearance) -> Self {
+    let name = match appearance {
+      Appearance::Dark => "default",
+      Appearance::Light => "default_light",
+    };
+    Self::from_parsed(
+      theme::default_theme(appearance),
+      &format!("the built-in theme `{name}`"),
+    )
+  }
+
+  fn from_parsed(parsed: theme::ParsedTheme, source: &str) -> Self {
+    let messages = parsed
+      .issues
+      .iter()
+      .map(|issue| format!("In {source}, {issue}."))
+      .collect();
+    Self {
+      theme: parsed.theme,
+      messages,
+    }
+  }
+
+  fn fallback(message: String) -> Self {
+    let mut loaded = Self::from_builtin(Appearance::Dark);
+    loaded.messages.insert(0, message);
+    loaded
+  }
+}
+
 fn parse_table(text: &str) -> Result<Table, ConfigError> {
   text
     .parse::<Table>()
@@ -131,34 +219,6 @@ fn merge(base: &mut Table, over: Table) {
       }
     }
   }
-}
-
-fn color(text: &str) -> Result<Rgb, ConfigError> {
-  let invalid = || ConfigError(format!("theme: `{text}` is not a #rrggbb color"));
-  let hex = text
-    .strip_prefix('#')
-    .filter(|hex| hex.len() == 6)
-    .ok_or_else(invalid)?;
-  let value = u32::from_str_radix(hex, 16).map_err(|_| invalid())?;
-  Ok(Rgb {
-    r: (value >> 16) as u8,
-    g: (value >> 8) as u8,
-    b: value as u8,
-  })
-}
-
-fn palette(theme: &RawTheme) -> Result<Palette, ConfigError> {
-  let mut ansi = [Rgb::default(); 16];
-  for (slot, text) in ansi.iter_mut().zip(&theme.ansi) {
-    *slot = color(text)?;
-  }
-  Ok(Palette {
-    ansi,
-    foreground: color(&theme.foreground)?,
-    background: color(&theme.background)?,
-    cursor: color(&theme.cursor)?,
-    selection: color(&theme.selection)?,
-  })
 }
 
 /// A key as pressed: the key's name (`t`, `]`, `enter`) and exactly which modifiers were held.

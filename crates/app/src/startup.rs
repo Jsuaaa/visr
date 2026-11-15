@@ -1,9 +1,9 @@
 //! What to tell the person when the core can't be reached at launch.
 
-use config::Config;
 use gpui::{Context, Window, div, prelude::*, px};
 use hc_client::Error;
 use hc_proto::rpc::ErrorKind;
+use term::palette::Palette;
 
 use crate::terminal_view::hsla;
 
@@ -14,8 +14,8 @@ pub(crate) struct StartupError {
 
 impl Render for StartupError {
   fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-    // The built-in theme: no config has been read yet, or it may be what failed.
-    let palette = Config::defaults().palette;
+    // The built-in colors: no config has been read yet, or it may be what failed.
+    let palette = Palette::default();
     div()
       .size_full()
       .flex()

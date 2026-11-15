@@ -24,6 +24,7 @@ use hc_proto::types::{
   Change, RemoveResult, RunParams, Size, SubscribeResult, TemplateInfo, Terminal, TerminalParams,
   TerminalState,
 };
+use term::palette::Palette;
 use ui::icons::{
   ICON_CODE, ICON_ELLIPSIS, ICON_EXPAND, ICON_FILES, ICON_FOLDER_OPENED, ICON_FONT, ICON_RESTORE,
   ICON_SOURCE_CONTROL, ICON_TERMINAL, ShellColors, StackColors, close_icon, glyph_icon, plus_icon,

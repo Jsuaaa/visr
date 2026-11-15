@@ -175,7 +175,7 @@ impl TerminalView {
       bounds: Bounds::default(),
       ended: false,
       screen: Screen::new(cols, rows),
-      palette: config.palette.clone(),
+      palette: Palette::default(),
       font,
       font_size,
       line_height,
@@ -200,7 +200,6 @@ impl TerminalView {
     window: &mut Window,
     cx: &mut Context<Self>,
   ) {
-    self.palette = config.palette.clone();
     self.font = font(config.font.family.clone());
     self.font_size = px(config.font.size);
     self.line_height = px(config.font.line_height);

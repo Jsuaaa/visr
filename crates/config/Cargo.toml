@@ -7,5 +7,5 @@ publish = false
 
 [dependencies]
 serde.workspace = true
-term.workspace = true
+theme.workspace = true
 toml.workspace = true

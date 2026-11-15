@@ -165,7 +165,7 @@ impl Workspace {
       .bg(rgb(MENU_BG))
       .shadow_lg()
       .text_size(px(13.0))
-      .text_color(hsla(self.config.palette.foreground))
+      .text_color(hsla(Palette::default().foreground))
       .occlude()
       // A press on the button itself is the button's: it closes the menu with its own click.
       .on_mouse_down_out(cx.listener(|workspace, event: &MouseDownEvent, _, cx| {

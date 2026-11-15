@@ -69,7 +69,7 @@ impl Workspace {
     let text = entry_label(&self.layout, &self.terminals, &entry);
     // The sidebar's own font, not the terminal's.
     let family = window.text_style().font_family;
-    let palette = &self.config.palette;
+    let palette = Palette::default();
     let colors = TextFieldColors {
       text: hsla(palette.foreground),
       selection: hsla(palette.selection),
@@ -314,7 +314,7 @@ impl Workspace {
       .bg(rgb(MENU_BG))
       .shadow_lg()
       .text_size(px(13.0))
-      .text_color(hsla(self.config.palette.foreground))
+      .text_color(hsla(Palette::default().foreground))
       .occlude()
       .on_mouse_down_out(cx.listener(|workspace, _, _, cx| {
         workspace.menu = None;
@@ -472,7 +472,7 @@ impl Workspace {
       .flex_none()
       .flex()
       .flex_col()
-      .text_color(hsla(self.config.palette.foreground))
+      .text_color(hsla(Palette::default().foreground))
       .text_size(px(13.0))
       .child(titlebar)
       .child(
