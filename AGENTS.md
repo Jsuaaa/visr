@@ -398,18 +398,12 @@ contributor who makes it.
 ## Pull requests
 
 The PR title follows the same Conventional Commits rules as a commit header, because a squash merge
-turns it into the commit on `dev`. One heading, one list, and screenshots for anything a reviewer would judge by looking at it:
-
-```markdown
-## Summary
-
-- open split panes in the focused terminal's directory
-- keep the sidebar toggle in place while the sidebar animates
-```
+turns it into the commit on `dev`. The PR body follows `.github/pull_request_template.md`: Summary,
+Type of change, Changes, Breaking changes, and Screenshots / Additional context.
 
 Bullets are lowercase, imperative and one line each, and they describe behavior rather than
-files. For a visual change, show before and after below the list. State which platforms you ran
-it on.
+files. Screenshots of a visual change go under the screenshots section, with before and after in a
+dark and a light theme. State which platforms you ran it on.
 
 ## Changelog
 

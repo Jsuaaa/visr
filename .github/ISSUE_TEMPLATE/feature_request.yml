@@ -1,0 +1,19 @@
+name: Feature request
+description: Suggest something Visr could do
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / Use case
+      description: What are you trying to accomplish that Visr currently makes difficult or impossible?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How would you like Visr to address this? Feel free to mention alternatives you have considered.
+    validations:
+      required: true
