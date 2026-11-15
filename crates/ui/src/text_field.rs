@@ -13,13 +13,21 @@ use gpui::{
 use crate::edit::EditBuffer;
 
 /// What a text field tells its owner.
-pub(crate) enum FieldEvent {
+pub enum FieldEvent {
   Submit(String),
   Cancel,
 }
 
+/// The colors a text field paints with, named by role.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TextFieldColors {
+  pub text: Hsla,
+  pub selection: Hsla,
+  pub cursor: Hsla,
+}
+
 /// A single-line text input with selection, mouse and IME support.
-pub(crate) struct TextField {
+pub struct TextField {
   buffer: EditBuffer,
   focus: FocusHandle,
   family: SharedString,
@@ -35,29 +43,28 @@ pub(crate) struct TextField {
 const FONT_SIZE: Pixels = px(13.0);
 
 impl TextField {
-  pub(crate) fn new(
+  pub fn new(
     text: &str,
     family: SharedString,
-    colors: [Hsla; 3],
+    colors: TextFieldColors,
     window: &mut Window,
     cx: &mut Context<Self>,
   ) -> Self {
     let focus = cx.focus_handle();
     window.focus(&focus);
-    let [text_color, selection_color, cursor_color] = colors;
     Self {
       buffer: EditBuffer::new(text),
       focus,
       family,
-      text_color,
-      selection_color,
-      cursor_color,
+      text_color: colors.text,
+      selection_color: colors.selection,
+      cursor_color: colors.cursor,
       layout: None,
       selecting: false,
     }
   }
 
-  pub(crate) fn text(&self) -> &str {
+  pub fn text(&self) -> &str {
     self.buffer.text()
   }
 

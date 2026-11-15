@@ -5,14 +5,12 @@
 
 mod assets;
 mod connection;
-mod edit;
 mod editors;
 mod git;
 mod input;
 mod setup;
 mod startup;
 mod terminal_view;
-mod text_field;
 mod tree;
 mod workspace;
 

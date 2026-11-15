@@ -31,6 +31,7 @@ use ui::icons::{
 };
 use ui::menu::{MenuColors, menu_item, menu_item_icon, menu_separator};
 use ui::motion::{self, Tween};
+use ui::text_field::{FieldEvent, TextField, TextFieldColors};
 use ui::tokens::{
   DIVIDER_WIDTH, HEADER_PADDING, PANE_BORDER_WIDTH, PANE_CHROME_HEIGHT, PANE_CHROME_WIDTH,
   PANE_EDGE, PANE_HEADER_HEIGHT, PANE_PADDING_BOTTOM, PANE_PADDING_LEFT, PANE_RADIUS, ROW_HEIGHT,
@@ -63,7 +64,6 @@ use crate::connection::{Connection, LAYOUT_DOC, missed_snapshot, subscribe};
 use crate::editors::{self, Editor};
 use crate::input;
 use crate::terminal_view::{Output, PaneFocused, TerminalView, hsla};
-use crate::text_field::{FieldEvent, TextField};
 
 const RECONNECT_INTERVAL: Duration = Duration::from_secs(1);
 

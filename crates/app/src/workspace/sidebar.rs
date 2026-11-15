@@ -70,11 +70,11 @@ impl Workspace {
     // The sidebar's own font, not the terminal's.
     let family = window.text_style().font_family;
     let palette = &self.config.palette;
-    let colors = [
-      hsla(palette.foreground),
-      hsla(palette.selection),
-      hsla(palette.cursor),
-    ];
+    let colors = TextFieldColors {
+      text: hsla(palette.foreground),
+      selection: hsla(palette.selection),
+      cursor: hsla(palette.cursor),
+    };
     let field = cx.new(|cx| TextField::new(&text, family, colors, window, cx));
     let events = cx.subscribe_in(&field, window, |workspace, _, event, window, cx| {
       let name = match event {
