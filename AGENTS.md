@@ -372,13 +372,13 @@ installer at a mirror or a `file://` fixture, and the app warns when it is set.
 
 ## Branches
 
-- `main` holds released code only. Every merge into `main` is a release.
+- `main` holds released code only. It receives only release merges from `dev`, and each one is a
+  release.
 - `dev` is the integration branch and the repository's default. Every feature and fix PR targets
   `dev`.
 - Work branches start from `dev` and are named `feat/…`, `fix/…`, `chore/…`, `docs/…` or `ci/…`.
 - Nothing is pushed directly to `main` or `dev`. Everything goes through a PR.
-- PRs into `dev` are squash-merged. Release PRs from `dev` into `main` use a merge commit, so the
-  two branches never diverge.
+- PRs into `dev` are squash-merged. Release PRs from `dev` into `main` use a merge commit.
 
 ## Commits
 
@@ -420,20 +420,20 @@ entry to `## [Unreleased]` in the same commit, under `Added`, `Changed`, `Deprec
 
 ## Releases
 
-1. From `dev`, open a branch `release/vX.Y.Z`. Bump `[workspace.package].version` in the root
-   `Cargo.toml` and refresh the lockfile with `cargo update --workspace --offline`. Only the
-   `version` lines of the workspace crates in `Cargo.lock` may change.
+1. Open a PR into `dev` with the commit `chore(release): bump visr to X.Y.Z`. Bump
+   `[workspace.package].version` in the root `Cargo.toml` and refresh the lockfile with
+   `cargo update --workspace --offline`. Only the `version` lines of the workspace crates in
+   `Cargo.lock` may change.
    In `CHANGELOG.md`, rename `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`, open a new empty
    `## [Unreleased]` above it, and update the links.
-2. Commit `chore(release): bump visr to X.Y.Z`. While on 0.x, a `feat` since the last release
-   bumps the minor version, and fixes alone bump the patch.
-3. Open a PR from `release/vX.Y.Z` into `main` and merge it with a merge commit.
-4. A maintainer tags the merge commit on `main` and pushes the tag:
+   While on 0.x, a `feat` since the last release bumps the minor version, and fixes alone bump the
+   patch.
+2. Open a release PR from `dev` into `main` and merge it with a merge commit.
+3. A maintainer tags the merge commit on `main` and pushes the tag:
    `git tag -a vX.Y.Z -m "visr X.Y.Z" && git push origin vX.Y.Z`. The tag push runs the release
    workflow, which builds the universal macOS dmg and the Windows x64 and arm64 executables and
    publishes the GitHub release with that version's changelog section. It can be dry-run from the
    Actions tab.
-5. Merge `main` back into `dev`.
 
 Signing: the macOS app is ad-hoc signed (`codesign --sign -`) and not notarized, and the Windows
 executables are unsigned. The README tells people how to open a build the first time on each
