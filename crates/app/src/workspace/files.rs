@@ -58,6 +58,7 @@ impl Workspace {
   }
 
   fn file_row(&self, row: tree::Row, cx: &mut Context<Self>) -> AnyElement {
+    let colors = Colors::active(cx);
     let icon = if row.is_dir {
       file_icons::folder(&row.name)
     } else {
@@ -86,7 +87,7 @@ impl Workspace {
       .when(acts, |item| {
         item
           .cursor_pointer()
-          .hover(|item| item.bg(rgb(ROW_HOVER_BG)))
+          .hover(|item| item.bg(colors.surface_hover))
           .on_click(cx.listener(move |workspace, _, _, cx| {
             if is_dir {
               workspace.toggle_dir(path.clone(), cx);
@@ -103,7 +104,7 @@ impl Workspace {
           .h_full()
           .left(px(ROW_INSET + INDENT * level as f32 + 6.0))
           .w(px(1.0))
-          .bg(rgb(PANE_BORDER))
+          .bg(colors.border)
       }))
       .child(
         div()
@@ -111,7 +112,7 @@ impl Workspace {
           .flex_none()
           .font_family(ICON_FONT)
           .text_size(px(11.0))
-          .text_color(rgb(DIM_TEXT))
+          .text_color(colors.text_muted)
           .children(chevron),
       )
       .child(gpui::img(icon).size(px(16.0)).flex_none())
@@ -120,6 +121,7 @@ impl Workspace {
   }
 
   pub(super) fn render_files(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    let colors = Colors::active(cx);
     let folder = self
       .files
       .root
@@ -148,13 +150,13 @@ impl Workspace {
         .px_4()
         .py_2()
         .text_size(px(12.0))
-        .text_color(rgb(DIM_TEXT))
+        .text_color(colors.text_muted)
         .child("No terminal open.")
         .into_any_element()
     } else {
       // Nothing to show until the first listing comes back.
       div().into_any_element()
     };
-    panel_frame("FILES", None, folder, body)
+    panel_frame("FILES", None, folder, body, colors)
   }
 }

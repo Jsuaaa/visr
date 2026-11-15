@@ -5,8 +5,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use gpui::{
-  Bounds, ClipboardItem, Context, ElementInputHandler, EntityInputHandler, EventEmitter,
-  FocusHandle, Font, FontStyle, FontWeight, Hsla, KeyDownEvent, Modifiers, MouseButton,
+  App, Bounds, ClipboardItem, Context, ElementInputHandler, EntityInputHandler, EventEmitter,
+  FocusHandle, Font, FontStyle, FontWeight, Global, Hsla, KeyDownEvent, Modifiers, MouseButton,
   MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point, Rgba, ScrollWheelEvent, StyledText,
   Subscription, Task, TextRun, UTF16Selection, UnderlineStyle, Window, canvas, div, fill, font,
   point, prelude::*, px, size,
@@ -35,6 +35,33 @@ pub(crate) fn hsla(color: Rgb) -> Hsla {
     a: 1.0,
   }
   .into()
+}
+
+/// The terminal colors of the active theme, as the palette every terminal draws with.
+pub(crate) struct TerminalColors(Palette);
+
+impl Global for TerminalColors {}
+
+impl TerminalColors {
+  pub(crate) fn new(colors: &theme::TerminalColors) -> Self {
+    let rgb = |color: theme::Rgba| Rgb {
+      r: color.r,
+      g: color.g,
+      b: color.b,
+    };
+    Self(Palette {
+      ansi: colors.ansi.map(rgb),
+      foreground: rgb(colors.foreground),
+      background: rgb(colors.background),
+      cursor: rgb(colors.cursor),
+      selection: rgb(colors.selection),
+    })
+  }
+
+  /// The installed palette.
+  pub(crate) fn palette(cx: &App) -> Palette {
+    cx.global::<Self>().0.clone()
+  }
 }
 
 /// The pane was clicked: the workspace makes it the focused one.
@@ -175,7 +202,7 @@ impl TerminalView {
       bounds: Bounds::default(),
       ended: false,
       screen: Screen::new(cols, rows),
-      palette: Palette::default(),
+      palette: TerminalColors::palette(cx),
       font,
       font_size,
       line_height,

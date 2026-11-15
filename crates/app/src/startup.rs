@@ -3,9 +3,8 @@
 use gpui::{Context, Window, div, prelude::*, px};
 use hc_client::Error;
 use hc_proto::rpc::ErrorKind;
-use term::palette::Palette;
 
-use crate::terminal_view::hsla;
+use crate::terminal_view::{TerminalColors, hsla};
 
 /// The whole window when there's no core to talk to.
 pub(crate) struct StartupError {
@@ -13,9 +12,8 @@ pub(crate) struct StartupError {
 }
 
 impl Render for StartupError {
-  fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-    // The built-in colors: no config has been read yet, or it may be what failed.
-    let palette = Palette::default();
+  fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    let palette = TerminalColors::palette(cx);
     div()
       .size_full()
       .flex()

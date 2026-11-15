@@ -34,6 +34,7 @@ impl Workspace {
 impl Render for Workspace {
   fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
     let now = Instant::now();
+    let colors = Colors::active(cx);
     if self
       .split_motion
       .as_ref()
@@ -82,20 +83,25 @@ impl Render for Workspace {
     );
     let panes = match self.layout.active() {
       Some(tab) => self.render_node(&tab.root, Vec::new(), (true, true), cx),
-      None => self.render_empty(),
+      None => self.render_empty(cx),
     };
     // With no pane to hold the keyboard, the window does, or no shortcut would get to run.
     if self.layout.active().is_none() && !self.focus_handle.contains_focused(window, cx) {
       window.focus(&self.focus_handle);
     }
     let config_error = self.config_error.as_ref().map(|error| {
-      banner(format!(
-        "Config not applied, keeping the last good one: {error}"
-      ))
+      banner(
+        format!("Config not applied, keeping the last good one: {error}"),
+        colors,
+      )
     });
+    let theme_notice = self
+      .theme_notice
+      .clone()
+      .map(|notice| banner(notice, colors));
     let reconnecting = self
       .reconnecting
-      .then(|| banner("Lost the connection to herdr-core. Reconnecting…".into()));
+      .then(|| banner("Lost the connection to herdr-core. Reconnecting…", colors));
     let main = div()
       .flex_1()
       .min_w_0()
@@ -123,6 +129,7 @@ impl Render for Workspace {
       )
       .children(reconnecting)
       .children(config_error)
+      .children(theme_notice)
       // The toolbar is drawn over the window's corner; this keeps its room.
       .when(self.layout.focused().is_some(), |main| {
         main.child(div().h(px(TOOLBAR_HEIGHT)).flex_none())
@@ -135,8 +142,8 @@ impl Render for Workspace {
       .relative()
       .flex()
       .size_full()
-      .bg(rgb(WINDOW_BG))
-      .text_color(hsla(Palette::default().foreground))
+      .bg(colors.surface)
+      .text_color(colors.text)
       .when(shown > 0.0, |root| {
         root.child(
           div()
@@ -195,7 +202,7 @@ impl Render for Workspace {
             .top_0()
             .left_0()
             .size_full()
-            .bg(rgb(WINDOW_BG))
+            .bg(colors.surface)
             .opacity(1.0 - self.entrance.value(now)),
         )
       })
@@ -211,14 +218,14 @@ impl Render for Workspace {
   }
 }
 
-fn banner(message: String) -> impl IntoElement {
+fn banner(message: impl Into<SharedString>, colors: Colors) -> impl IntoElement {
   div()
     .flex_none()
     .mt_2()
     .px_3()
     .py_1()
     .rounded_md()
-    .bg(rgb(ERROR_BG))
+    .bg(colors.surface_error)
     .text_size(px(12.0))
-    .child(message)
+    .child(message.into())
 }

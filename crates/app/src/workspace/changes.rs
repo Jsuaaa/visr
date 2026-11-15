@@ -58,14 +58,14 @@ impl GitView {
 }
 
 /// The letter and color the usual editors give each status.
-fn badge(status: Status) -> (&'static str, u32) {
+fn badge(status: Status, colors: Colors) -> (&'static str, Hsla) {
   match status {
-    Status::Modified => ("M", GIT_MODIFIED),
-    Status::Added => ("A", GIT_ADDED),
-    Status::Deleted => ("D", GIT_DELETED),
-    Status::Renamed => ("R", GIT_RENAMED),
-    Status::Untracked => ("U", GIT_UNTRACKED),
-    Status::Conflicted => ("!", GIT_CONFLICT),
+    Status::Modified => ("M", colors.git_modified),
+    Status::Added => ("A", colors.git_added),
+    Status::Deleted => ("D", colors.git_deleted),
+    Status::Renamed => ("R", colors.git_untracked),
+    Status::Untracked => ("U", colors.git_untracked),
+    Status::Conflicted => ("!", colors.git_conflict),
   }
 }
 
@@ -88,7 +88,7 @@ fn short_folder(folder: &str) -> String {
   }
 }
 
-fn section_header(title: &str, count: usize) -> AnyElement {
+fn section_header(title: &str, count: usize, colors: Colors) -> AnyElement {
   div()
     .h(px(ROW_HEIGHT_CHANGES))
     .w_full()
@@ -97,9 +97,9 @@ fn section_header(title: &str, count: usize) -> AnyElement {
     .items_center()
     .gap_2()
     .text_size(px(11.0))
-    .text_color(rgb(DIM_TEXT))
+    .text_color(colors.text_muted)
     .child(title.to_string())
-    .child(count_pill(count))
+    .child(count_pill(count, colors))
     .into_any_element()
 }
 
@@ -107,7 +107,8 @@ impl Workspace {
   /// A change as a row: it opens its file in the editor the toolbar's menu offers, unless the
   /// file is gone.
   fn change_row(&self, change: &Change, root: Option<&str>, cx: &mut Context<Self>) -> AnyElement {
-    let (letter, color) = badge(change.status);
+    let colors = Colors::active(cx);
+    let (letter, color) = badge(change.status, colors);
     let (name, folder) = split_path(&change.path);
     // An untracked folder is listed by its own name, with a slash.
     let icon = if change.path.ends_with('/') {
@@ -132,7 +133,7 @@ impl Workspace {
       .when_some(target.filter(|_| opens), |row, target| {
         row
           .cursor_pointer()
-          .hover(|row| row.bg(rgb(ROW_HOVER_BG)))
+          .hover(|row| row.bg(colors.surface_hover))
           .on_click(cx.listener(move |workspace, _, _, _| {
             workspace.open_in_editor(&target);
           }))
@@ -142,7 +143,7 @@ impl Workspace {
         div()
           .min_w_0()
           .truncate()
-          .text_color(rgb(color))
+          .text_color(color)
           .when(change.status == Status::Deleted, |name| name.line_through())
           .child(name.to_string()),
       )
@@ -152,7 +153,7 @@ impl Workspace {
           .min_w_0()
           .truncate()
           .text_size(px(11.0))
-          .text_color(rgb(DIM_TEXT))
+          .text_color(colors.text_muted)
           .child(short_folder(folder)),
       )
       .child(
@@ -160,19 +161,20 @@ impl Workspace {
           .w(px(12.0))
           .flex_none()
           .text_size(px(11.0))
-          .text_color(rgb(color))
+          .text_color(color)
           .child(letter),
       )
       .into_any_element()
   }
 
   pub(super) fn render_changes(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    let colors = Colors::active(cx);
     let dim = |text: &str| {
       div()
         .px_4()
         .py_2()
         .text_size(px(12.0))
-        .text_color(rgb(DIM_TEXT))
+        .text_color(colors.text_muted)
         .child(text.to_string())
         .into_any_element()
     };
@@ -198,7 +200,7 @@ impl Workspace {
         gpui::uniform_list(
           "changes-list",
           git.map_or(0, |view| view.rows.len()),
-          cx.processor(|workspace, range: std::ops::Range<usize>, _, cx| {
+          cx.processor(move |workspace, range: std::ops::Range<usize>, _, cx| {
             let Some(GitView {
               result: Ok(snapshot),
               rows,
@@ -211,7 +213,7 @@ impl Workspace {
             let mut lines = Vec::new();
             for row in &rows[range.start.min(end)..end] {
               lines.push(match *row {
-                ChangeRow::Header(title, count) => section_header(title, count),
+                ChangeRow::Header(title, count) => section_header(title, count, colors),
                 ChangeRow::Item(index) => {
                   workspace.change_row(&snapshot.changes[index], snapshot.root.as_deref(), cx)
                 }
@@ -236,6 +238,6 @@ impl Workspace {
         .child(div().truncate().child(branch))
         .into_any_element()
     });
-    panel_frame("CHANGES", count, branch, body)
+    panel_frame("CHANGES", count, branch, body, colors)
   }
 }

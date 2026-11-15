@@ -13,4 +13,5 @@ hc-client.workspace = true
 hc-proto.workspace = true
 serde_json.workspace = true
 term.workspace = true
+theme.workspace = true
 ui.workspace = true

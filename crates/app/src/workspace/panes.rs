@@ -47,7 +47,8 @@ fn empty_message(sidebar_open: bool, keys: Option<&str>) -> String {
 
 impl Workspace {
   /// What shows when no terminal is open. Its header is part of the title bar.
-  pub(super) fn render_empty(&self) -> AnyElement {
+  pub(super) fn render_empty(&self, cx: &App) -> AnyElement {
+    let colors = Colors::active(cx);
     let header = div()
       .h(px(PANE_HEADER_HEIGHT))
       .flex_none()
@@ -58,8 +59,8 @@ impl Workspace {
       .flex_col()
       .rounded(px(PANE_RADIUS))
       .border(px(PANE_BORDER_WIDTH))
-      .border_color(rgb(PANE_BORDER))
-      .text_color(rgb(DIM_TEXT))
+      .border_color(colors.border)
+      .text_color(colors.text_muted)
       .child(header)
       .child(
         div()
@@ -87,7 +88,7 @@ impl Workspace {
       Node::Leaf { terminal } => match self.panes.get(terminal) {
         // Its view is drawn over the tab; its place keeps an empty card to grow from.
         Some(_) if self.zoomed().is_some_and(|zoom| &zoom.address == terminal) => {
-          self.pane_placeholder(terminal)
+          self.pane_placeholder(terminal, cx)
         }
         Some(pane) => self.render_pane(terminal, pane, edges, false, cx),
         None => div().size_full().into_any_element(),
@@ -166,6 +167,7 @@ impl Workspace {
     icon: AnyElement,
     cx: &mut Context<Self>,
   ) -> AnyElement {
+    let colors = Colors::active(cx);
     let target = address.to_string();
     div()
       .id(SharedString::from(format!("{action:?}-{address}")))
@@ -174,7 +176,7 @@ impl Workspace {
       .items_center()
       .justify_center()
       .rounded_md()
-      .hover(|button| button.bg(rgb(ROW_HOVER_BG)))
+      .hover(|button| button.bg(colors.surface_hover))
       .child(icon)
       .on_click(cx.listener(move |workspace, _, window, cx| {
         cx.stop_propagation();
@@ -193,13 +195,14 @@ impl Workspace {
     })
   }
 
-  pub(super) fn pane_placeholder(&self, address: &str) -> AnyElement {
+  pub(super) fn pane_placeholder(&self, address: &str, cx: &App) -> AnyElement {
+    let colors = Colors::active(cx);
     div()
       .relative()
       .size_full()
       .rounded(px(PANE_RADIUS))
       .border(px(PANE_BORDER_WIDTH))
-      .border_color(rgb(PANE_BORDER))
+      .border_color(colors.border)
       .child(self.measure_pane(address))
       .into_any_element()
   }
@@ -227,7 +230,9 @@ impl Workspace {
       (None, Some(terminal)) => display_name(terminal),
       (None, None) => address.to_string(),
     };
-    let dim: Hsla = rgb(DIM_TEXT).into();
+    let colors = Colors::active(cx);
+    let palette = TerminalColors::palette(cx);
+    let dim = colors.text_muted;
     let split = self
       .layout
       .active()
@@ -286,7 +291,7 @@ impl Workspace {
       .pr_1()
       .text_size(px(13.0))
       .text_color(if is_focused {
-        hsla(Palette::default().foreground)
+        hsla(palette.foreground)
       } else {
         dim
       })
@@ -311,12 +316,12 @@ impl Workspace {
       .overflow_hidden()
       .rounded(px(PANE_RADIUS))
       .border(px(PANE_BORDER_WIDTH))
-      .border_color(rgb(if is_focused {
-        PANE_BORDER_FOCUSED
+      .border_color(if is_focused {
+        colors.border_focused
       } else {
-        PANE_BORDER
-      }))
-      .bg(hsla(Palette::default().background))
+        colors.border
+      })
+      .bg(hsla(palette.background))
       .when(!zoomed, |card| {
         card.relative().child(self.measure_pane(address))
       })

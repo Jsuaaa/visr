@@ -359,6 +359,7 @@ pub(super) fn panel_frame(
   count: Option<usize>,
   side: Option<AnyElement>,
   body: AnyElement,
+  colors: Colors,
 ) -> impl IntoElement {
   let label = div()
     .px(px(ROW_INSET))
@@ -369,14 +370,14 @@ pub(super) fn panel_frame(
     .justify_between()
     .gap_2()
     .text_size(px(11.0))
-    .text_color(rgb(DIM_TEXT))
+    .text_color(colors.text_muted)
     .child(
       div()
         .flex()
         .items_center()
         .gap_2()
         .child(title.to_string())
-        .children(count.map(count_pill)),
+        .children(count.map(|count| count_pill(count, colors))),
     )
     .children(side);
   div()
@@ -391,11 +392,11 @@ pub(super) fn panel_frame(
 }
 
 /// A small count beside a title.
-pub(super) fn count_pill(count: usize) -> AnyElement {
+pub(super) fn count_pill(count: usize, colors: Colors) -> AnyElement {
   div()
     .px_1()
     .rounded_sm()
-    .bg(rgb(ICON_BG))
+    .bg(colors.surface_active)
     .text_size(px(10.0))
     .child(count.to_string())
     .into_any_element()

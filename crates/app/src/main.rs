@@ -16,14 +16,16 @@ mod workspace;
 
 use std::borrow::Cow;
 
-use config::Config;
+use config::{Config, LoadedTheme};
 use connection::Connection;
 use gpui::{
-  App, Application, Bounds, TitlebarOptions, WindowBounds, WindowOptions, point, prelude::*, px,
-  size,
+  App, Application, Bounds, TitlebarOptions, WindowAppearance, WindowBounds, WindowOptions, point,
+  prelude::*, px, size,
 };
 use setup::{Launch, Setup};
 use startup::{StartupError, startup_message};
+use terminal_view::TerminalColors;
+use theme::Appearance;
 use ui::tokens::TRAFFIC_LIGHTS_TOP;
 use workspace::Workspace;
 
@@ -61,6 +63,16 @@ fn main() {
         }
       })
       .detach();
+      // The theme is in place before any window exists, so the first frame already draws with it.
+      let loaded = LoadedTheme::load(
+        &config.theme,
+        system_appearance(cx.window_appearance()),
+        &config::themes_dir(),
+      );
+      ui::colors::install(&loaded.theme.ui, cx);
+      cx.set_global(TerminalColors::new(&loaded.theme.terminal));
+      // Shown once, when the window opens.
+      let theme_notice = (!loaded.messages.is_empty()).then(|| loaded.messages.join("\n").into());
       let bounds = Bounds::centered(None, size(px(1100.0), px(700.0)), cx);
       let options = WindowOptions {
         window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -75,7 +87,17 @@ fn main() {
       let opened = match connection {
         Ok(connection) => cx
           .open_window(options, |window, cx| {
-            cx.new(|cx| Workspace::new(connection, initial, config, config_error, window, cx))
+            cx.new(|cx| {
+              Workspace::new(
+                connection,
+                initial,
+                config,
+                config_error,
+                theme_notice,
+                window,
+                cx,
+              )
+            })
           })
           .map(|_| ()),
         // Missing or out of date, herdr-core is something Visr can install.
@@ -85,6 +107,7 @@ fn main() {
               initial,
               config,
               config_error,
+              theme_notice,
             };
             cx.open_window(options, |window, cx| {
               cx.new(|cx| Setup::new(reason, launch, window, cx))
@@ -101,4 +124,12 @@ fn main() {
       opened.expect("open the window");
       cx.activate(true);
     });
+}
+
+/// Which built-in theme the system appearance asks for when `config.toml` names none.
+fn system_appearance(appearance: WindowAppearance) -> Appearance {
+  match appearance {
+    WindowAppearance::Light | WindowAppearance::VibrantLight => Appearance::Light,
+    WindowAppearance::Dark | WindowAppearance::VibrantDark => Appearance::Dark,
+  }
 }

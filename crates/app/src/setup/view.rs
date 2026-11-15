@@ -7,23 +7,20 @@ use std::time::{Duration, Instant};
 
 use config::Config;
 use gpui::{
-  AnyElement, ClipboardItem, Context, FocusHandle, KeyDownEvent, Stateful, Window, div, prelude::*,
-  px,
+  AnyElement, ClipboardItem, Context, FocusHandle, KeyDownEvent, SharedString, Stateful, Window,
+  div, prelude::*, px,
 };
 use hc_client::Error;
 use hc_proto::PROTOCOL_GENERATION;
 use hc_proto::rpc::ErrorKind;
+use ui::colors::Colors;
 use ui::motion::{self, Tween};
 
 use super::install::{self, Cancel, Event};
 use super::manifest::{self, MANUAL_URL, Manifest, Plan, Refusal};
 use crate::connection::Connection;
 use crate::startup::startup_message;
-use crate::terminal_view::hsla;
 use crate::workspace::Workspace;
-use crate::workspace::theme::{
-  SETUP_ACCENT, SETUP_BUTTON_BG, SETUP_DIM, SETUP_LINK, SETUP_LOG_BG, SETUP_WARNING, WINDOW_BG,
-};
 
 /// How much of the installer's output the window shows.
 const LOG_LINES: usize = 14;
@@ -56,6 +53,7 @@ pub(crate) struct Launch {
   pub(crate) initial: Option<String>,
   pub(crate) config: Config,
   pub(crate) config_error: Option<String>,
+  pub(crate) theme_notice: Option<SharedString>,
 }
 
 /// What the retry button does after a failure.
@@ -475,6 +473,7 @@ impl Setup {
         launch.initial,
         launch.config,
         launch.config_error,
+        launch.theme_notice,
         window,
         cx,
       );
@@ -492,18 +491,18 @@ impl Setup {
   }
 }
 
-fn button(id: &'static str, label: &str, primary: bool) -> Stateful<gpui::Div> {
+fn button(id: &'static str, label: &str, primary: bool, colors: Colors) -> Stateful<gpui::Div> {
   div()
     .id(id)
     .px_4()
     .py_2()
     .rounded_md()
     .cursor_pointer()
-    .bg(gpui::rgb(if primary {
-      SETUP_ACCENT
+    .bg(if primary {
+      colors.button_primary
     } else {
-      SETUP_BUTTON_BG
-    }))
+      colors.surface_active
+    })
     .hover(|button| button.opacity(0.85))
     .child(label.to_string())
 }
@@ -512,12 +511,12 @@ fn column() -> gpui::Div {
   div().flex().flex_col().gap_4()
 }
 
-fn link(id: &'static str, label: &str, url: String) -> Stateful<gpui::Div> {
+fn link(id: &'static str, label: &str, url: String, colors: Colors) -> Stateful<gpui::Div> {
   div()
     .id(id)
     .cursor_pointer()
     .text_size(px(13.0))
-    .text_color(gpui::rgb(SETUP_LINK))
+    .text_color(colors.text_link)
     .hover(|link| link.opacity(0.8))
     .child(label.to_string())
     .on_click(move |_, _, cx| cx.open_url(&url))
@@ -569,8 +568,10 @@ impl Render for Setup {
     {
       window.focus(&self.focus_handle);
     }
-    let palette = term::palette::Palette::default();
-    let dim = gpui::rgb(SETUP_DIM);
+    let colors = Colors::active(cx);
+    let dim = colors.text_secondary;
+    let button = |id: &'static str, label: &str, primary: bool| button(id, label, primary, colors);
+    let link = |id: &'static str, label: &str, url: String| link(id, label, url, colors);
     let heading = |text: &str| div().text_size(px(20.0)).child(text.to_string());
     let paragraph = |text: &str| div().text_color(dim).child(text.to_string());
     let manual = || link("manual", "Install it manually", MANUAL_URL.to_string());
@@ -579,7 +580,7 @@ impl Render for Setup {
       div()
         .p_3()
         .rounded_md()
-        .bg(gpui::rgb(SETUP_LOG_BG))
+        .bg(colors.surface_sunken)
         .text_size(px(12.0))
         .text_color(dim)
         .children(shown.iter().map(|line| div().child(line.clone())))
@@ -612,7 +613,7 @@ impl Render for Setup {
           .children(override_warning(&releases).map(|warning| {
             div()
               .text_size(px(13.0))
-              .text_color(gpui::rgb(SETUP_WARNING))
+              .text_color(colors.text_warning)
               .child(warning)
           }))
           .child(
@@ -703,8 +704,8 @@ impl Render for Setup {
       .items_center()
       .justify_center()
       .p_8()
-      .bg(gpui::rgb(WINDOW_BG))
-      .text_color(hsla(palette.foreground))
+      .bg(colors.surface)
+      .text_color(colors.text)
       .text_size(px(15.0))
       .child(
         div()

@@ -14,5 +14,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - File and changes panels for the active terminal's folder, updated when a command runs or finishes
 - Open a terminal's folder in an installed editor
 - Changes to `config.toml` apply when you return to the window or when an editor in a terminal closes
+- Dark and light built-in themes, picked from the system appearance at launch, and a `theme` setting in `config.toml` to choose one
+- Your own themes in the `themes` folder next to `config.toml`
 
 [Unreleased]: https://github.com/atleugim/visr/commits/dev

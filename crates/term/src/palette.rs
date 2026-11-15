@@ -3,14 +3,6 @@
 use alacritty_terminal::term::color::Colors;
 use alacritty_terminal::vte::ansi::{Color, NamedColor, Rgb};
 
-const fn rgb(hex: u32) -> Rgb {
-  Rgb {
-    r: (hex >> 16) as u8,
-    g: (hex >> 8) as u8,
-    b: hex as u8,
-  }
-}
-
 /// The theme colors a terminal draws with.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Palette {
@@ -20,35 +12,6 @@ pub struct Palette {
   pub background: Rgb,
   pub cursor: Rgb,
   pub selection: Rgb,
-}
-
-impl Default for Palette {
-  fn default() -> Self {
-    Self {
-      ansi: [
-        rgb(0x1d1f21),
-        rgb(0xcc6666),
-        rgb(0xb5bd68),
-        rgb(0xf0c674),
-        rgb(0x81a2be),
-        rgb(0xb294bb),
-        rgb(0x8abeb7),
-        rgb(0xc5c8c6),
-        rgb(0x666666),
-        rgb(0xd54e53),
-        rgb(0xb9ca4a),
-        rgb(0xe7c547),
-        rgb(0x7aa6da),
-        rgb(0xc397d8),
-        rgb(0x70c0b1),
-        rgb(0xeaeaea),
-      ],
-      foreground: rgb(0xc5c8c6),
-      background: rgb(0x1d1f21),
-      cursor: rgb(0xc5c8c6),
-      selection: rgb(0x373b41),
-    }
-  }
 }
 
 /// Steps of the xterm 6x6x6 color cube.

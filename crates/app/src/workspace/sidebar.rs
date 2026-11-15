@@ -18,13 +18,13 @@ struct SidebarRow {
   on_open: Option<OnOpen>,
 }
 
-pub(super) fn indicator_color(indicator: Indicator) -> u32 {
+pub(super) fn indicator_color(indicator: Indicator, colors: Colors) -> Hsla {
   match indicator {
-    Indicator::Quiet => 0x666666,
-    Indicator::Working => 0xf0c674,
-    Indicator::NeedsYou => 0xcc6666,
-    Indicator::Done => 0xb5bd68,
-    Indicator::Finished => 0x373b41,
+    Indicator::Quiet => colors.status_quiet,
+    Indicator::Working => colors.status_working,
+    Indicator::NeedsYou => colors.status_blocked,
+    Indicator::Done => colors.status_done,
+    Indicator::Finished => colors.status_exited,
   }
 }
 
@@ -69,13 +69,13 @@ impl Workspace {
     let text = entry_label(&self.layout, &self.terminals, &entry);
     // The sidebar's own font, not the terminal's.
     let family = window.text_style().font_family;
-    let palette = Palette::default();
-    let colors = TextFieldColors {
-      text: hsla(palette.foreground),
-      selection: hsla(palette.selection),
-      cursor: hsla(palette.cursor),
+    let colors = Colors::active(cx);
+    let field_colors = TextFieldColors {
+      text: colors.text,
+      selection: colors.selection,
+      cursor: colors.text,
     };
-    let field = cx.new(|cx| TextField::new(&text, family, colors, window, cx));
+    let field = cx.new(|cx| TextField::new(&text, family, field_colors, window, cx));
     let events = cx.subscribe_in(&field, window, |workspace, _, event, window, cx| {
       let name = match event {
         FieldEvent::Submit(name) => Some(name.clone()),
@@ -111,6 +111,7 @@ impl Workspace {
 
   /// Draws the parts every sidebar row shares.
   fn sidebar_row(&self, content: SidebarRow, cx: &mut Context<Self>) -> AnyElement {
+    let colors = Colors::active(cx);
     let SidebarRow {
       row,
       icon,
@@ -120,7 +121,7 @@ impl Workspace {
       is_live,
       on_open,
     } = content;
-    let dim: Hsla = rgb(DIM_TEXT).into();
+    let dim = colors.text_muted;
     let renaming = self
       .renaming
       .as_ref()
@@ -139,8 +140,8 @@ impl Workspace {
           .px_1()
           .rounded_sm()
           .border_1()
-          .border_color(rgb(PANE_BORDER_FOCUSED))
-          .bg(rgb(WINDOW_BG))
+          .border_color(colors.border_focused)
+          .bg(colors.surface)
           .child(renaming.field.clone())
       }
       None => div()
@@ -162,8 +163,8 @@ impl Workspace {
       .items_center()
       .gap_2()
       .rounded_lg()
-      .when(is_active, |row| row.bg(rgb(ROW_ACTIVE_BG)))
-      .hover(|row| row.bg(rgb(ROW_HOVER_BG)))
+      .when(is_active, |row| row.bg(colors.surface_active))
+      .hover(|row| row.bg(colors.surface_hover))
       .when_some(on_open, |row, on_open| {
         row.on_click(cx.listener(move |workspace, _, window, cx| on_open(workspace, window, cx)))
       })
@@ -185,7 +186,7 @@ impl Workspace {
           .size(px(6.0))
           .flex_none()
           .rounded_full()
-          .bg(rgb(indicator_color(dot))),
+          .bg(indicator_color(dot, colors)),
       )
       .child(
         div()
@@ -197,7 +198,7 @@ impl Workspace {
           .justify_center()
           .rounded_md()
           .text_color(dim)
-          .hover(|button| button.bg(rgb(ROW_HOVER_BG_STRONG)))
+          .hover(|button| button.bg(colors.surface_hover_strong))
           // A live row shows its close button on hover only; a finished one always offers rm.
           .when(is_live, |button| {
             button
@@ -220,6 +221,7 @@ impl Workspace {
     index: usize,
     cx: &mut Context<Self>,
   ) -> AnyElement {
+    let colors = Colors::active(cx);
     let members = entry.terminals();
     let dots: Vec<Indicator> = members
       .iter()
@@ -233,12 +235,12 @@ impl Workspace {
       .unwrap_or(Indicator::Quiet);
     let icon = if members.len() > 1 {
       stack_icon(StackColors {
-        shell: shell_colors(),
-        behind: rgb(PANE_BORDER_FOCUSED).into(),
-        outline: rgb(WINDOW_BG).into(),
+        shell: shell_colors(colors),
+        behind: colors.border_focused,
+        outline: colors.surface,
       })
     } else {
-      shell_icon(shell_colors()).into_any_element()
+      shell_icon(shell_colors(colors)).into_any_element()
     };
     let content = SidebarRow {
       row: members
@@ -264,11 +266,12 @@ impl Workspace {
     terminal: &Terminal,
     cx: &mut Context<Self>,
   ) -> AnyElement {
+    let colors = Colors::active(cx);
     let address = terminal.address.clone();
     let is_live = terminal.state == TerminalState::Live;
     let content = SidebarRow {
       row: address.clone(),
-      icon: shell_icon(shell_colors()).into_any_element(),
+      icon: shell_icon(shell_colors(colors)).into_any_element(),
       name: entry_label(&self.layout, &self.terminals, entry),
       dot: indicator(terminal),
       is_active: false,
@@ -304,38 +307,44 @@ impl Workspace {
     let up_row = menu.row.clone();
     let down_row = menu.row.clone();
     let close_row = menu.row.clone();
-    let colors = menu_colors();
+    let colors = Colors::active(cx);
+    let menu_colors = menu_colors(colors);
     div()
       .w(px(220.0))
       .py_1()
       .rounded_lg()
       .border_1()
-      .border_color(rgb(MENU_BORDER))
-      .bg(rgb(MENU_BG))
+      .border_color(colors.surface_hover_strong)
+      .bg(colors.surface_raised)
       .shadow_lg()
       .text_size(px(13.0))
-      .text_color(hsla(Palette::default().foreground))
+      .text_color(colors.text)
       .occlude()
       .on_mouse_down_out(cx.listener(|workspace, _, _, cx| {
         workspace.menu = None;
         cx.notify();
       }))
       .child(
-        menu_item("rename", &format!("Rename {noun}…"), None, true, colors).on_click(cx.listener(
-          move |workspace, _, window, cx| {
-            workspace.menu = None;
-            workspace.start_rename(&rename_row, window, cx);
-          },
-        )),
+        menu_item(
+          "rename",
+          &format!("Rename {noun}…"),
+          None,
+          true,
+          menu_colors,
+        )
+        .on_click(cx.listener(move |workspace, _, window, cx| {
+          workspace.menu = None;
+          workspace.start_rename(&rename_row, window, cx);
+        })),
       )
-      .child(menu_separator(colors))
+      .child(menu_separator(menu_colors))
       .child(
         menu_item(
           "up",
           &format!("Move {noun} Up"),
           shortcut(Action::MoveTabUp),
           can_move_up,
-          colors,
+          menu_colors,
         )
         .when(can_move_up, |item| {
           item.on_click(cx.listener(move |workspace, _, window, cx| {
@@ -351,7 +360,7 @@ impl Workspace {
           &format!("Move {noun} Down"),
           shortcut(Action::MoveTabDown),
           can_move_down,
-          colors,
+          menu_colors,
         )
         .when(can_move_down, |item| {
           item.on_click(cx.listener(move |workspace, _, window, cx| {
@@ -361,14 +370,14 @@ impl Workspace {
           }))
         }),
       )
-      .child(menu_separator(colors))
+      .child(menu_separator(menu_colors))
       .child(
         menu_item(
           "close",
           &format!("Close {noun}"),
           shortcut(Action::CloseTab),
           true,
-          colors,
+          menu_colors,
         )
         .on_click(cx.listener(move |workspace, _, _, cx| {
           workspace.menu = None;
@@ -378,8 +387,9 @@ impl Workspace {
   }
 
   pub(super) fn sidebar_toggle(&self, cx: &mut Context<Self>) -> impl IntoElement {
-    chrome_button("toggle-sidebar")
-      .child(sidebar_icon(rgb(DIM_TEXT).into()))
+    let colors = Colors::active(cx);
+    chrome_button("toggle-sidebar", colors)
+      .child(sidebar_icon(colors.text_muted))
       .on_click(cx.listener(|workspace, _, _, cx| {
         workspace.toggle_sidebar();
         cx.notify();
@@ -388,14 +398,16 @@ impl Workspace {
 
   /// Starts a shell. It belongs to the sidebar and goes with it.
   fn new_shell_button(&self, cx: &mut Context<Self>) -> impl IntoElement {
-    chrome_button("new-shell")
-      .child(plus_icon(rgb(DIM_TEXT).into()))
+    let colors = Colors::active(cx);
+    chrome_button("new-shell", colors)
+      .child(plus_icon(colors.text_muted))
       .on_click(cx.listener(|workspace, _, window, cx| {
         workspace.run_action(Action::NewTab, window, cx);
       }))
   }
 
   pub(super) fn render_sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    let colors = Colors::active(cx);
     // Leaves room for the macOS traffic lights, which sit over this strip.
     let titlebar = div()
       .h(px(TITLEBAR_HEIGHT))
@@ -414,7 +426,7 @@ impl Workspace {
       .pt_2()
       .pb_1()
       .text_size(px(11.0))
-      .text_color(rgb(DIM_TEXT))
+      .text_color(colors.text_muted)
       .child("TERMINALS");
     let templates: Vec<AnyElement> = self
       .templates
@@ -429,8 +441,8 @@ impl Workspace {
           .flex()
           .items_center()
           .rounded_lg()
-          .text_color(rgb(DIM_TEXT))
-          .hover(|button| button.bg(rgb(ROW_HOVER_BG)))
+          .text_color(colors.text_muted)
+          .hover(|button| button.bg(colors.surface_hover))
           .child(format!("+ {name}"))
           .on_click(cx.listener(move |workspace, _, window, cx| {
             if workspace.open_tab(vec![name.clone()], None, cx) {
@@ -472,7 +484,7 @@ impl Workspace {
       .flex_none()
       .flex()
       .flex_col()
-      .text_color(hsla(Palette::default().foreground))
+      .text_color(colors.text)
       .text_size(px(13.0))
       .child(titlebar)
       .child(
@@ -492,9 +504,9 @@ impl Workspace {
 }
 
 /// The colors of a shell's icon in the sidebar.
-fn shell_colors() -> ShellColors {
+fn shell_colors(colors: Colors) -> ShellColors {
   ShellColors {
-    background: rgb(ICON_BG).into(),
-    text: rgb(DIM_TEXT).into(),
+    background: colors.surface_active,
+    text: colors.text_muted,
   }
 }

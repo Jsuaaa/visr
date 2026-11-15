@@ -5794,6 +5794,7 @@ name = "ui"
 version = "0.1.0"
 dependencies = [
  "gpui",
+ "theme",
 ]
 
 [[package]]
@@ -6018,6 +6019,7 @@ dependencies = [
  "hc-proto",
  "serde_json",
  "term",
+ "theme",
  "ui",
 ]
 

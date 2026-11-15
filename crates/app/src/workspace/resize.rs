@@ -130,6 +130,7 @@ impl Workspace {
       Edge::Sidebar => ("edge-sidebar", "edge-sidebar-group"),
       Edge::Panel => ("edge-panel", "edge-panel-group"),
     };
+    let colors = Colors::active(cx);
     let dragged = self
       .edge_drag
       .as_ref()
@@ -140,13 +141,13 @@ impl Workspace {
       .h_full()
       .rounded_full()
       .when(dragged, |line| {
-        line.bg(rgb(if at_default {
-          EDGE_SNAPPED
+        line.bg(if at_default {
+          colors.border_snapped
         } else {
-          PANE_BORDER_FOCUSED
-        }))
+          colors.border_focused
+        })
       })
-      .group_hover(group, |line| line.bg(rgb(PANE_BORDER_FOCUSED)));
+      .group_hover(group, |line| line.bg(colors.border_focused));
     div()
       .id(id)
       .group(group)

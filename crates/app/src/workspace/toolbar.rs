@@ -39,9 +39,9 @@ fn live_dir(terminal: &Terminal) -> Option<String> {
   (!dir.is_empty()).then(|| dir.to_string())
 }
 
-fn glyph(icon: (&'static str, f32)) -> AnyElement {
+fn glyph(icon: (&'static str, f32), colors: Colors) -> AnyElement {
   div()
-    .text_color(rgb(DIM_TEXT))
+    .text_color(colors.text_muted)
     .child(glyph_icon(icon))
     .into_any_element()
 }
@@ -76,8 +76,9 @@ impl Workspace {
   /// Only while a terminal is active.
   pub(super) fn render_toolbar(&self, cx: &mut Context<Self>) -> Option<impl IntoElement> {
     self.layout.focused()?;
+    let colors = Colors::active(cx);
     let bounds = Rc::clone(&self.more_bounds);
-    let more = chrome_button("toolbar-more")
+    let more = chrome_button("toolbar-more", colors)
       .size(px(BUTTON_HEIGHT))
       .relative()
       .child(glyph_icon(ICON_ELLIPSIS))
@@ -101,7 +102,7 @@ impl Workspace {
                         glyph: (&'static str, f32),
                         label: &'static str,
                         cx: &mut Context<Self>| {
-      chrome_button(id)
+      chrome_button(id, colors)
         .w_auto()
         .h(px(BUTTON_HEIGHT))
         // The icon's box has room around its drawing and the text does not, so the icon side
@@ -110,7 +111,7 @@ impl Workspace {
         .pr(px(8.0))
         .gap_1()
         .when(self.panel == Some(panel), |button| {
-          button.bg(rgb(ROW_ACTIVE_BG))
+          button.bg(colors.surface_active)
         })
         .child(glyph_icon(glyph))
         .child(div().text_size(px(12.0)).child(label))
@@ -155,17 +156,18 @@ impl Workspace {
     let open_folder = folder.clone();
     let open_editor = folder.clone();
     let new_terminal = folder;
-    let colors = menu_colors();
+    let colors = Colors::active(cx);
+    let menu_colors = menu_colors(colors);
     let panel = div()
       .w(px(220.0))
       .py_1()
       .rounded_lg()
       .border_1()
-      .border_color(rgb(MENU_BORDER))
-      .bg(rgb(MENU_BG))
+      .border_color(colors.surface_hover_strong)
+      .bg(colors.surface_raised)
       .shadow_lg()
       .text_size(px(13.0))
-      .text_color(hsla(Palette::default().foreground))
+      .text_color(colors.text)
       .occlude()
       // A press on the button itself is the button's: it closes the menu with its own click.
       .on_mouse_down_out(cx.listener(|workspace, event: &MouseDownEvent, _, cx| {
@@ -181,10 +183,10 @@ impl Workspace {
       .child(
         menu_item_icon(
           "open-folder",
-          glyph(ICON_FOLDER_OPENED),
+          glyph(ICON_FOLDER_OPENED, colors),
           "Open Folder",
           has_folder,
-          colors,
+          menu_colors,
         )
         .when(has_folder, |item| {
           item.on_click(cx.listener(move |workspace, _, _, cx| {
@@ -209,24 +211,27 @@ impl Workspace {
             .child(glyph_icon(ICON_CODE))
             .into_any_element(),
         };
-        menu_item_icon("open-editor", logo, &label, has_folder, colors).when(has_folder, |item| {
-          item.on_click(cx.listener(move |workspace, _, _, cx| {
-            workspace.toolbar_menu = None;
-            if let Some(folder) = &open_editor {
-              editor.open(std::path::Path::new(folder));
-            }
-            cx.notify();
-          }))
-        })
+        menu_item_icon("open-editor", logo, &label, has_folder, menu_colors).when(
+          has_folder,
+          |item| {
+            item.on_click(cx.listener(move |workspace, _, _, cx| {
+              workspace.toolbar_menu = None;
+              if let Some(folder) = &open_editor {
+                editor.open(std::path::Path::new(folder));
+              }
+              cx.notify();
+            }))
+          },
+        )
       }))
-      .child(menu_separator(colors))
+      .child(menu_separator(menu_colors))
       .child(
         menu_item_icon(
           "new-terminal",
-          glyph(ICON_TERMINAL),
+          glyph(ICON_TERMINAL, colors),
           "New Terminal",
           has_folder,
-          colors,
+          menu_colors,
         )
         .when(has_folder, |item| {
           item.on_click(cx.listener(move |workspace, _, window, cx| {

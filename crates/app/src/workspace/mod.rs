@@ -24,7 +24,7 @@ use hc_proto::types::{
   Change, RemoveResult, RunParams, Size, SubscribeResult, TemplateInfo, Terminal, TerminalParams,
   TerminalState,
 };
-use term::palette::Palette;
+use ui::colors::Colors;
 use ui::icons::{
   ICON_CODE, ICON_ELLIPSIS, ICON_EXPAND, ICON_FILES, ICON_FOLDER_OPENED, ICON_FONT, ICON_RESTORE,
   ICON_SOURCE_CONTROL, ICON_TERMINAL, ShellColors, StackColors, close_icon, glyph_icon, plus_icon,
@@ -50,21 +50,19 @@ mod render;
 mod resize;
 mod session;
 mod sidebar;
-pub(crate) mod theme;
 mod toolbar;
 
 use changes::GitView;
 use panel::{OutputLook, PANEL_WIDTH, Panel, PanelSwitch, TreeState};
 use resize::{Edge, EdgeDrag};
 use sidebar::row_key;
-use theme::*;
 use toolbar::{TOOLBAR_HEIGHT, ToolbarMenu};
 
 use crate::SIDEBAR_WIDTH;
 use crate::connection::{Connection, LAYOUT_DOC, missed_snapshot, subscribe};
 use crate::editors::{self, Editor};
 use crate::input;
-use crate::terminal_view::{Output, PaneFocused, TerminalView, hsla};
+use crate::terminal_view::{Output, PaneFocused, TerminalColors, TerminalView, hsla};
 
 const RECONNECT_INTERVAL: Duration = Duration::from_secs(1);
 
@@ -139,6 +137,8 @@ pub(crate) struct Workspace {
   config: Config,
   /// The config file is invalid; the last good config stays in use.
   config_error: Option<String>,
+  /// What was wrong with the theme at launch, in full sentences.
+  theme_notice: Option<SharedString>,
   /// The connection to the core dropped and a new one is being tried.
   reconnecting: bool,
   menu: Option<RowMenu>,
@@ -211,6 +211,7 @@ impl Workspace {
     initial: Option<String>,
     config: Config,
     config_error: Option<String>,
+    theme_notice: Option<SharedString>,
     window: &mut Window,
     cx: &mut Context<Self>,
   ) -> Self {
@@ -312,6 +313,7 @@ impl Workspace {
       dragging: None,
       config,
       config_error,
+      theme_notice,
       reconnecting: false,
       menu: None,
       toolbar_menu: None,
@@ -368,17 +370,17 @@ impl Workspace {
 }
 
 /// The colors every context menu draws its rows and separators with.
-fn menu_colors() -> MenuColors {
+fn menu_colors(colors: Colors) -> MenuColors {
   MenuColors {
-    separator: rgb(MENU_BORDER).into(),
-    hover_background: rgb(MENU_HOVER_BG).into(),
-    dim_text: rgb(DIM_TEXT).into(),
+    separator: colors.surface_hover_strong,
+    hover_background: colors.surface_raised_hover,
+    dim_text: colors.text_muted,
   }
 }
 
 /// A title bar or toolbar button in the workspace's colors.
-fn chrome_button(id: &'static str) -> gpui::Stateful<gpui::Div> {
-  titlebar_button(id, rgb(ROW_HOVER_BG).into()).text_color(rgb(DIM_TEXT))
+fn chrome_button(id: &'static str, colors: Colors) -> gpui::Stateful<gpui::Div> {
+  titlebar_button(id, colors.surface_hover).text_color(colors.text_muted)
 }
 
 /// A double click on the title bar does what the system says: zoom the window by default.
