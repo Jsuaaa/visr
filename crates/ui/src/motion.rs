@@ -5,13 +5,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 /// How long layout changes take: quick enough not to wait on, slow enough to follow.
-const DURATION: Duration = Duration::from_millis(220);
+const DURATION: Duration = Duration::from_millis(200);
 
 /// The system asks for less motion: changes happen at once.
 static REDUCED: AtomicBool = AtomicBool::new(false);
 
 /// How long a change takes now: none when the system asks for less motion.
-pub(crate) fn duration() -> Duration {
+pub fn duration() -> Duration {
   if REDUCED.load(Ordering::Relaxed) {
     Duration::ZERO
   } else {
@@ -20,7 +20,7 @@ pub(crate) fn duration() -> Duration {
 }
 
 /// Reads the system's reduce motion setting; call it again to notice a change.
-pub(crate) fn check_reduce_motion() {
+pub fn check_reduce_motion() {
   REDUCED.store(system_reduces_motion(), Ordering::Relaxed);
 }
 
@@ -71,7 +71,7 @@ fn reduce_motion_from(output: &str) -> bool {
 
 /// A value moving from one number to another over a duration, read at any instant.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) struct Tween {
+pub struct Tween {
   from: f32,
   to: f32,
   start: Instant,
@@ -79,7 +79,8 @@ pub(crate) struct Tween {
 }
 
 impl Tween {
-  pub(crate) fn new(from: f32, to: f32, start: Instant, duration: Duration) -> Self {
+  /// A tween from `from` to `to` that starts at `start` and lasts `duration`.
+  pub fn new(from: f32, to: f32, start: Instant, duration: Duration) -> Self {
     Self {
       from,
       to,
@@ -88,7 +89,8 @@ impl Tween {
     }
   }
 
-  pub(crate) fn settled(value: f32) -> Self {
+  /// A tween already at rest at `value`.
+  pub fn settled(value: f32) -> Self {
     Self::new(value, value, Instant::now(), Duration::ZERO)
   }
 
@@ -101,17 +103,18 @@ impl Tween {
   }
 
   /// Ease-out cubic: moves off quickly and settles gently.
-  pub(crate) fn value(&self, now: Instant) -> f32 {
+  pub fn value(&self, now: Instant) -> f32 {
     let eased = 1.0 - (1.0 - self.progress(now)).powi(3);
     self.from + (self.to - self.from) * eased
   }
 
-  pub(crate) fn done(&self, now: Instant) -> bool {
+  /// Whether the tween has reached its target by `now`.
+  pub fn done(&self, now: Instant) -> bool {
     self.progress(now) >= 1.0
   }
 
   /// Heads for `to` from wherever it is at `now`.
-  pub(crate) fn retarget(&self, to: f32, now: Instant, duration: Duration) -> Self {
+  pub fn retarget(&self, to: f32, now: Instant, duration: Duration) -> Self {
     Self::new(self.value(now), to, now, duration)
   }
 }

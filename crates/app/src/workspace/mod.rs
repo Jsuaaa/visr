@@ -24,6 +24,7 @@ use hc_proto::types::{
   Change, RemoveResult, RunParams, Size, SubscribeResult, TemplateInfo, Terminal, TerminalParams,
   TerminalState,
 };
+use ui::motion::{self, Tween};
 
 mod actions;
 mod changes;
@@ -52,7 +53,6 @@ use toolbar::{TOOLBAR_HEIGHT, ToolbarMenu};
 use crate::connection::{Connection, LAYOUT_DOC, missed_snapshot, subscribe};
 use crate::editors::{self, Editor};
 use crate::input;
-use crate::motion::{self, Tween};
 use crate::terminal_view::{Output, PaneFocused, TerminalView, hsla};
 use crate::text_field::{FieldEvent, TextField};
 use crate::{SIDEBAR_WIDTH, TITLEBAR_HEIGHT};

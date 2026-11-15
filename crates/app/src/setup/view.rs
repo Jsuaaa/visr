@@ -13,11 +13,11 @@ use gpui::{
 use hc_client::Error;
 use hc_proto::PROTOCOL_GENERATION;
 use hc_proto::rpc::ErrorKind;
+use ui::motion::{self, Tween};
 
 use super::install::{self, Cancel, Event};
 use super::manifest::{self, MANUAL_URL, Manifest, Plan, Refusal};
 use crate::connection::Connection;
-use crate::motion::{self, Tween};
 use crate::startup::startup_message;
 use crate::terminal_view::hsla;
 use crate::workspace::Workspace;

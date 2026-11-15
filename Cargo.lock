@@ -5783,6 +5783,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "ui"
+version = "0.1.0"
+
+[[package]]
 name = "unicase"
 version = "2.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6004,6 +6008,7 @@ dependencies = [
  "hc-proto",
  "serde_json",
  "term",
+ "ui",
 ]
 
 [[package]]

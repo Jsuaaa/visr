@@ -9,7 +9,6 @@ mod editors;
 mod file_icons;
 mod git;
 mod input;
-mod motion;
 mod setup;
 mod startup;
 mod terminal_view;
@@ -44,7 +43,7 @@ const FONTS: [&[u8]; 4] = [
 ];
 
 fn main() {
-  motion::check_reduce_motion();
+  ui::motion::check_reduce_motion();
   let connection = Connection::open();
   let initial = std::env::args().nth(1);
   let (config, config_error) = match Config::load(&config::config_path()) {
