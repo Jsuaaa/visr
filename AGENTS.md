@@ -401,9 +401,11 @@ The PR title follows the same Conventional Commits rules as a commit header, bec
 turns it into the commit on `dev`. The PR body follows `.github/pull_request_template.md`: Summary,
 Changes, Breaking changes, and Screenshots / Additional context.
 
-Bullets are lowercase, imperative and one line each, and they describe behavior rather than
-files. Screenshots of a visual change go under the screenshots section, with before and after in a
-dark and a light theme. State which platforms you ran it on.
+Summary is one or two sentences on why the change is needed and what a person gets out of it. The
+bullets go under Changes, one per behavior change. They are lowercase, imperative and one line
+each, and they describe behavior rather than files. Screenshots of a visual change go under the
+screenshots section, with before and after in a dark and a light theme. State which platforms you
+ran it on.
 
 ## Changelog
 
