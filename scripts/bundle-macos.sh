@@ -11,22 +11,18 @@ pkgid="$(cargo pkgid -p visr --manifest-path "$root/Cargo.toml")"
 version="${1:-${pkgid##*[#@]}}"
 binary="${2:-$root/target/release/visr}"
 app="$root/target/release/Visr.app"
-licenses="$app/Contents/Resources/licenses"
 
 if [ -z "${2:-}" ]; then
   cargo build --release -p visr --manifest-path "$root/Cargo.toml"
 fi
 
 rm -rf "$app"
-mkdir -p "$app/Contents/MacOS" "$licenses/fonts" "$licenses/icons-editors" "$licenses/icons-symbols"
+mkdir -p "$app/Contents/MacOS"
 cp "$binary" "$app/Contents/MacOS/visr"
 chmod +x "$app/Contents/MacOS/visr"
 sed "s/VERSION/$version/g" "$root/packaging/macos/Info.plist" > "$app/Contents/Info.plist"
 
-cp "$root/LICENSE" "$licenses/"
-cp "$root"/crates/app/assets/fonts/*.txt "$licenses/fonts/"
-cp "$root/crates/app/assets/icons/editors/LICENSE.txt" "$licenses/icons-editors/"
-cp "$root/crates/ui/assets/icons/symbols/LICENSE.txt" "$licenses/icons-symbols/"
+"$root/scripts/licenses.sh" "$app/Contents/Resources"
 
 codesign --force --sign - "$app"
 
