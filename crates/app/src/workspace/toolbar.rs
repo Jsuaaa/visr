@@ -155,6 +155,7 @@ impl Workspace {
     let open_folder = folder.clone();
     let open_editor = folder.clone();
     let new_terminal = folder;
+    let colors = menu_colors();
     let panel = div()
       .w(px(220.0))
       .py_1()
@@ -183,6 +184,7 @@ impl Workspace {
           glyph(ICON_FOLDER_OPENED),
           "Open Folder",
           has_folder,
+          colors,
         )
         .when(has_folder, |item| {
           item.on_click(cx.listener(move |workspace, _, _, cx| {
@@ -207,7 +209,7 @@ impl Workspace {
             .child(glyph_icon(ICON_CODE))
             .into_any_element(),
         };
-        menu_item_icon("open-editor", logo, &label, has_folder).when(has_folder, |item| {
+        menu_item_icon("open-editor", logo, &label, has_folder, colors).when(has_folder, |item| {
           item.on_click(cx.listener(move |workspace, _, _, cx| {
             workspace.toolbar_menu = None;
             if let Some(folder) = &open_editor {
@@ -217,13 +219,14 @@ impl Workspace {
           }))
         })
       }))
-      .child(menu_separator())
+      .child(menu_separator(colors))
       .child(
         menu_item_icon(
           "new-terminal",
           glyph(ICON_TERMINAL),
           "New Terminal",
           has_folder,
+          colors,
         )
         .when(has_folder, |item| {
           item.on_click(cx.listener(move |workspace, _, window, cx| {

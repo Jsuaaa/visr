@@ -304,6 +304,7 @@ impl Workspace {
     let up_row = menu.row.clone();
     let down_row = menu.row.clone();
     let close_row = menu.row.clone();
+    let colors = menu_colors();
     div()
       .w(px(220.0))
       .py_1()
@@ -320,20 +321,21 @@ impl Workspace {
         cx.notify();
       }))
       .child(
-        menu_item("rename", &format!("Rename {noun}…"), None, true).on_click(cx.listener(
+        menu_item("rename", &format!("Rename {noun}…"), None, true, colors).on_click(cx.listener(
           move |workspace, _, window, cx| {
             workspace.menu = None;
             workspace.start_rename(&rename_row, window, cx);
           },
         )),
       )
-      .child(menu_separator())
+      .child(menu_separator(colors))
       .child(
         menu_item(
           "up",
           &format!("Move {noun} Up"),
           shortcut(Action::MoveTabUp),
           can_move_up,
+          colors,
         )
         .when(can_move_up, |item| {
           item.on_click(cx.listener(move |workspace, _, window, cx| {
@@ -349,6 +351,7 @@ impl Workspace {
           &format!("Move {noun} Down"),
           shortcut(Action::MoveTabDown),
           can_move_down,
+          colors,
         )
         .when(can_move_down, |item| {
           item.on_click(cx.listener(move |workspace, _, window, cx| {
@@ -358,13 +361,14 @@ impl Workspace {
           }))
         }),
       )
-      .child(menu_separator())
+      .child(menu_separator(colors))
       .child(
         menu_item(
           "close",
           &format!("Close {noun}"),
           shortcut(Action::CloseTab),
           true,
+          colors,
         )
         .on_click(cx.listener(move |workspace, _, _, cx| {
           workspace.menu = None;

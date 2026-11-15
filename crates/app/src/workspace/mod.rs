@@ -29,6 +29,7 @@ use ui::icons::{
   ICON_SOURCE_CONTROL, ICON_TERMINAL, ShellColors, StackColors, close_icon, glyph_icon, plus_icon,
   shell_icon, sidebar_icon, split_icon, stack_icon, titlebar_button,
 };
+use ui::menu::{MenuColors, menu_item, menu_item_icon, menu_separator};
 use ui::motion::{self, Tween};
 use ui::tokens::{
   DIVIDER_WIDTH, HEADER_PADDING, PANE_BORDER_WIDTH, PANE_CHROME_HEIGHT, PANE_CHROME_WIDTH,
@@ -40,7 +41,6 @@ use ui::tokens::{
 mod actions;
 mod changes;
 mod files;
-mod menu;
 mod panel;
 mod panes;
 mod reload;
@@ -52,7 +52,6 @@ pub(crate) mod theme;
 mod toolbar;
 
 use changes::GitView;
-use menu::{menu_item, menu_item_icon, menu_separator};
 use panel::{OutputLook, PANEL_WIDTH, Panel, PanelSwitch, TreeState};
 use resize::{Edge, EdgeDrag};
 use sidebar::row_key;
@@ -364,6 +363,15 @@ impl Workspace {
     self.save();
     self.note_focus(cx);
     cx.notify();
+  }
+}
+
+/// The colors every context menu draws its rows and separators with.
+fn menu_colors() -> MenuColors {
+  MenuColors {
+    separator: rgb(MENU_BORDER).into(),
+    hover_background: rgb(MENU_HOVER_BG).into(),
+    dim_text: rgb(DIM_TEXT).into(),
   }
 }
 
