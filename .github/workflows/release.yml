@@ -71,7 +71,7 @@ jobs:
             darwin/aarch64-apple-darwin/visr \
             darwin/x86_64-apple-darwin/visr
           lipo -info visr-universal
-          lipo -verify_arch visr-universal arm64 x86_64
+          lipo visr-universal -verify_arch arm64 x86_64
       - run: |
           # A dry run has no tag, so it takes the version from the workspace.
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
