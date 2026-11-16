@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-15
+
 ### Added
 
 - Terminals from herdr-core in tabs and splits
@@ -18,4 +20,5 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Reload the theme with a shortcut, so edits to its file show without a restart
 - Your own themes in the `themes` folder next to `config.toml`
 
-[Unreleased]: https://github.com/atleugim/visr/commits/dev
+[Unreleased]: https://github.com/atleugim/visr/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/atleugim/visr/commits/v0.1.0
