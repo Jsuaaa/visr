@@ -236,6 +236,25 @@ impl Workspace {
       .into_any_element()
   }
 
+  /// The dot a row shows: a loose terminal's own, or the most urgent of a tab's panes. A tab's
+  /// finished panes don't count: they fold away and close right after, so their color would
+  /// only flash on the tab.
+  fn row_dot(&self, entry: &Entry) -> Indicator {
+    match entry {
+      Entry::Tab { terminals, .. } => most_urgent(
+        terminals
+          .iter()
+          .filter_map(|address| self.terminals.get(address))
+          .map(indicator)
+          .filter(|dot| *dot != Indicator::Finished),
+      ),
+      Entry::Loose(address) => self
+        .terminals
+        .get(address)
+        .map_or(Indicator::Quiet, indicator),
+    }
+  }
+
   pub(super) fn render_tab_row(
     &self,
     entry: &Entry,
@@ -245,13 +264,6 @@ impl Workspace {
   ) -> AnyElement {
     let colors = Colors::active(cx);
     let members = entry.terminals();
-    // The stack's dot is its most urgent pane's.
-    let dot = most_urgent(
-      members
-        .iter()
-        .filter_map(|address| self.terminals.get(address))
-        .map(indicator),
-    );
     let icon = if members.len() > 1 {
       stack_icon(StackColors {
         shell: shell_colors(colors),
@@ -270,7 +282,7 @@ impl Workspace {
       ),
       icon,
       name: entry_label(&self.layout, &self.terminals, entry),
-      dot: Some(dot),
+      dot: Some(self.row_dot(entry)),
       is_active: index == self.layout.active_tab,
       is_live: true,
       in_folder,
@@ -296,7 +308,7 @@ impl Workspace {
       key: SidebarKey::Row(address.clone()),
       icon: shell_icon(shell_colors(colors)).into_any_element(),
       name: entry_label(&self.layout, &self.terminals, entry),
-      dot: Some(indicator(terminal)),
+      dot: Some(self.row_dot(entry)),
       is_active: false,
       is_live,
       in_folder,
@@ -319,16 +331,9 @@ impl Workspace {
     } else {
       ICON_FOLDER_OPENED
     };
-    let dot = folder.collapsed.then(|| {
-      most_urgent(
-        folder
-          .rows
-          .iter()
-          .flat_map(Entry::terminals)
-          .filter_map(|address| self.terminals.get(address))
-          .map(indicator),
-      )
-    });
+    let dot = folder
+      .collapsed
+      .then(|| most_urgent(folder.rows.iter().map(|entry| self.row_dot(entry))));
     let holds_active_tab = folder
       .rows
       .iter()
