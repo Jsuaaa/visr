@@ -24,7 +24,7 @@ impl Workspace {
     let Some(address) = self.start(argv, size, cwd) else {
       return false;
     };
-    self.layout.new_tab(&address);
+    self.layout.new_tab_in_active_folder(&address);
     true
   }
 

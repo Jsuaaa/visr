@@ -518,22 +518,62 @@ impl Layout {
     }
   }
 
-  /// Brings a terminal into view: its tab if it has one, else in place of the focused pane.
+  /// Brings a terminal into view: its tab if it has one, else in place of the focused pane when
+  /// that tab is in the terminal's place, else in a tab of its own. A tab never mixes two
+  /// folders, so a terminal from another place gets its own tab, which ranks where its row was.
   pub fn show(&mut self, terminal: &str) {
     if let Some(index) = self.tabs.iter().position(|tab| tab.root.contains(terminal)) {
       self.active_tab = index;
       self.tabs[index].focused = terminal.into();
       return;
     }
-    let Some(tab) = self.active_mut() else {
+    let same_place = self
+      .active()
+      .is_some_and(|tab| self.tab_folder(tab) == self.terminal_folder(terminal));
+    if !same_place {
       self.new_tab(terminal);
       return;
-    };
+    }
+    let Some(tab) = self.active_mut() else { return };
     let focused = tab.focused.clone();
     if let Some(leaf) = tab.root.leaf_mut(&focused) {
       *leaf = Node::leaf(terminal);
       tab.focused = terminal.into();
     }
+  }
+
+  /// Opens a tab like `new_tab`; when the tab that was active sits in a folder, the terminal goes
+  /// last in that folder and the folder opens. Otherwise it stays unlisted, at the top level.
+  pub fn new_tab_in_active_folder(&mut self, terminal: &str) {
+    let folder = self.active().and_then(|tab| self.tab_folder(tab));
+    self.new_tab(terminal);
+    let Some(id) = folder else { return };
+    self.unlist(terminal);
+    for slot in &mut self.order {
+      if let Slot::Folder(folder) = slot
+        && folder.id == id
+      {
+        folder.terminals.push(terminal.into());
+        folder.collapsed = false;
+      }
+    }
+  }
+
+  /// The folder a terminal is listed in; `None` at the top level or when unlisted.
+  fn terminal_folder(&self, terminal: &str) -> Option<FolderId> {
+    self.places().into_iter().find_map(|place| match place {
+      Place::Terminal { address, folder } if address == terminal => Some(folder),
+      _ => None,
+    })?
+  }
+
+  /// The folder of a tab: that of its first terminal in `places()`, `None` when none is listed.
+  fn tab_folder(&self, tab: &Tab) -> Option<FolderId> {
+    let shown = tab.root.leaves();
+    self.places().into_iter().find_map(|place| match place {
+      Place::Terminal { address, folder } if shown.contains(&address) => Some(folder),
+      _ => None,
+    })?
   }
 
   /// Sets the split at `path` in the active tab, kept between `MIN_RATIO` and `MAX_RATIO`.
@@ -587,6 +627,66 @@ pub(crate) mod testing {
 mod tests {
   use super::testing::{folder, id, layout_with, top};
   use super::*;
+
+  #[test]
+  fn showing_a_loose_terminal_of_the_same_folder_takes_the_focused_pane() {
+    let mut layout = layout_with(&["t1"], vec![folder(1, false, &["t1", "t2"])]);
+    layout.show("t2");
+    assert_eq!(layout.shown(), vec!["t2"]);
+    assert_eq!(layout.order, vec![folder(1, false, &["t1", "t2"])]);
+  }
+
+  #[test]
+  fn showing_a_loose_terminal_with_both_at_the_top_level_takes_the_focused_pane() {
+    let mut layout = layout_with(&["t1"], vec![top("t1")]);
+    layout.show("t2");
+    assert_eq!(layout.shown(), vec!["t2"]);
+  }
+
+  #[test]
+  fn showing_a_loose_terminal_from_another_place_opens_its_own_tab() {
+    for order in [
+      vec![folder(1, false, &["t1"]), folder(2, false, &["t2"])],
+      vec![folder(1, false, &["t1"]), top("t2")],
+      vec![folder(1, false, &["t1"])],
+      vec![top("t1"), folder(1, false, &["t2"])],
+    ] {
+      let mut layout = layout_with(&["t1"], order.clone());
+      layout.show("t2");
+      assert_eq!(layout.shown(), vec!["t1", "t2"], "with {order:?}");
+      assert_eq!(layout.active_tab, 1);
+      assert_eq!(layout.order, order);
+    }
+  }
+
+  #[test]
+  fn showing_with_no_tab_opens_one() {
+    let mut layout = layout_with(&[], vec![folder(1, false, &["t1"])]);
+    layout.show("t1");
+    assert_eq!(layout.shown(), vec!["t1"]);
+  }
+
+  #[test]
+  fn a_new_tab_goes_last_in_the_active_tabs_folder_and_opens_it() {
+    let mut layout = layout_with(&["t1"], vec![folder(1, true, &["t1", "t2"]), top("t3")]);
+    layout.new_tab_in_active_folder("t4");
+    assert_eq!(layout.active_tab, 1);
+    assert_eq!(
+      layout.order,
+      vec![folder(1, false, &["t1", "t2", "t4"]), top("t3")]
+    );
+  }
+
+  #[test]
+  fn a_new_tab_from_the_top_level_or_from_no_tab_stays_unlisted() {
+    let mut layout = layout_with(&["t1"], vec![top("t1"), folder(1, false, &[])]);
+    layout.new_tab_in_active_folder("t2");
+    assert_eq!(layout.order, vec![top("t1"), folder(1, false, &[])]);
+    let mut empty = layout_with(&[], vec![folder(1, false, &[])]);
+    empty.new_tab_in_active_folder("t1");
+    assert_eq!(empty.shown(), vec!["t1"]);
+    assert_eq!(empty.order, vec![folder(1, false, &[])]);
+  }
 
   #[test]
   fn forgetting_a_terminal_drops_its_place_and_name_and_keeps_its_folder() {
