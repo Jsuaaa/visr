@@ -444,7 +444,8 @@ impl Workspace {
       ],
     };
     div()
-      .w(px(220.0))
+      .min_w(px(220.0))
+      .max_w(px(320.0))
       .py_1()
       .rounded_lg()
       .border_1()
