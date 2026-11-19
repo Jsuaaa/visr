@@ -1,6 +1,7 @@
 //! What the app knows about the core's terminals, kept current from `events.subscribe`.
 
 pub mod layout;
+pub mod sidebar;
 
 use hc_proto::types::{Change, Event, StatusState, SubscribeResult, Terminal, TerminalState};
 
@@ -152,44 +153,15 @@ impl Entry {
 }
 
 /// Rows in the order the user arranged, else the core's: what a tab shows never moves it.
+/// Folders are flattened away.
 pub fn sidebar_entries(layout: &layout::Layout, terminals: &Terminals) -> Vec<Entry> {
-  let tabs = layout
-    .tabs
-    .iter()
-    .enumerate()
-    .map(|(index, tab)| Entry::Tab {
-      index,
-      terminals: tab.root.leaves().into_iter().map(str::to_string).collect(),
-    });
-  let shown = layout.shown();
-  let loose = terminals
-    .list()
-    .iter()
-    // One about to be removed would flash in the list until it is.
-    .filter(|terminal| {
-      !shown.contains(&terminal.address.as_str()) && !terminals.is_leaving(terminal)
+  sidebar::sidebar_items(layout, terminals)
+    .into_iter()
+    .flat_map(|item| match item {
+      sidebar::SidebarItem::Row(entry) => vec![entry],
+      sidebar::SidebarItem::Folder(folder) => folder.rows,
     })
-    .map(|terminal| Entry::Loose(terminal.address.clone()));
-  let places = layout.places();
-  let arranged = places.len();
-  let rank = |address: &str| {
-    let listed = places.iter().position(
-      |place| matches!(place, layout::Place::Terminal { address: known, .. } if *known == address),
-    );
-    match listed {
-      Some(index) => index,
-      None => {
-        let core = terminals
-          .list()
-          .iter()
-          .position(|terminal| terminal.address == address);
-        arranged + core.unwrap_or(usize::MAX - arranged)
-      }
-    }
-  };
-  let mut entries: Vec<Entry> = tabs.chain(loose).collect();
-  entries.sort_by_key(|entry| entry.terminals().into_iter().map(rank).min());
-  entries
+    .collect()
 }
 
 /// What a sidebar row reads: the user's name for it, else its (focused) terminal's.
@@ -232,6 +204,21 @@ pub fn indicator(terminal: &Terminal) -> Indicator {
   }
 }
 
+/// The dot for a group of terminals: the one that needs a person most.
+pub fn most_urgent(indicators: impl IntoIterator<Item = Indicator>) -> Indicator {
+  let urgency = |indicator: &Indicator| match indicator {
+    Indicator::NeedsYou => 4,
+    Indicator::Working => 3,
+    Indicator::Done => 2,
+    Indicator::Finished => 1,
+    Indicator::Quiet => 0,
+  };
+  indicators
+    .into_iter()
+    .max_by_key(urgency)
+    .unwrap_or(Indicator::Quiet)
+}
+
 /// What to call a terminal in a list: its name, the title its program set, or what runs in it.
 pub fn display_name(terminal: &Terminal) -> String {
   if let Some(name) = &terminal.name {
@@ -247,5 +234,32 @@ pub fn display_name(terminal: &Terminal) -> String {
       .first()
       .cloned()
       .unwrap_or_else(|| terminal.address.clone()),
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn the_most_urgent_indicator_wins() {
+    let urgent = |dots: &[Indicator]| most_urgent(dots.iter().copied());
+    assert_eq!(
+      urgent(&[Indicator::Quiet, Indicator::Done, Indicator::Working]),
+      Indicator::Working
+    );
+    assert_eq!(
+      urgent(&[Indicator::Finished, Indicator::NeedsYou]),
+      Indicator::NeedsYou
+    );
+    assert_eq!(
+      urgent(&[Indicator::Finished, Indicator::Done]),
+      Indicator::Done
+    );
+    assert_eq!(
+      urgent(&[Indicator::Quiet, Indicator::Finished]),
+      Indicator::Finished
+    );
+    assert_eq!(urgent(&[]), Indicator::Quiet);
   }
 }

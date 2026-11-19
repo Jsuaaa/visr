@@ -5,6 +5,9 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::Entry;
+use crate::sidebar::SidebarItem;
+
 /// The smallest share of the space a split gives its first child.
 const MIN_RATIO: f32 = 0.1;
 /// The largest share of the space a split gives its first child.
@@ -410,6 +413,30 @@ impl Layout {
     }
   }
 
+  /// Writes the sidebar as shown back to `order`: one slot per terminal, folders with their rows.
+  /// Terminals the sidebar doesn't show drop out.
+  pub fn arrange(&mut self, items: &[SidebarItem]) {
+    let addresses = |entry: &Entry| {
+      entry
+        .terminals()
+        .into_iter()
+        .map(str::to_string)
+        .collect::<Vec<_>>()
+    };
+    self.order = items
+      .iter()
+      .flat_map(|item| match item {
+        SidebarItem::Row(entry) => addresses(entry).into_iter().map(Slot::Terminal).collect(),
+        SidebarItem::Folder(folder) => vec![Slot::Folder(Folder {
+          id: folder.id,
+          name: folder.name.clone(),
+          collapsed: folder.collapsed,
+          terminals: folder.rows.iter().flat_map(addresses).collect(),
+        })],
+      })
+      .collect();
+  }
+
   /// Stops showing the focused pane; a tab left empty closes.
   pub fn close_focused(&mut self) {
     let Some(focused) = self.focused().map(str::to_string) else {
@@ -609,6 +636,35 @@ pub(crate) mod testing {
         .iter()
         .map(|address| address.to_string())
         .collect(),
+    })
+  }
+
+  /// Live terminals in this order, as the core would report them.
+  pub(crate) fn core(addresses: &[&str]) -> crate::Terminals {
+    use hc_proto::types::{SubscribeResult, Terminal, TerminalState};
+    let terminals = addresses
+      .iter()
+      .map(|address| Terminal {
+        address: address.to_string(),
+        name: None,
+        argv: Vec::new(),
+        cwd: String::new(),
+        state: TerminalState::Live,
+        labels: Default::default(),
+        cols: 80,
+        rows: 24,
+        title: String::new(),
+        status: None,
+        foreground: None,
+        template: None,
+        exit_code: None,
+        reason: None,
+      })
+      .collect();
+    crate::Terminals::from_snapshot(SubscribeResult {
+      seq: 0,
+      channel: None,
+      terminals,
     })
   }
 
