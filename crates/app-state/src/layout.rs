@@ -350,9 +350,63 @@ impl Layout {
       return;
     };
     let focused = tab.focused.clone();
+    let shown: Vec<String> = tab.root.leaves().into_iter().map(str::to_string).collect();
     if let Some(leaf) = tab.root.leaf_mut(&focused) {
       *leaf = Node::split(axis, Node::leaf(&focused), Node::leaf(terminal));
       tab.focused = terminal.into();
+    }
+    self.list_after(&shown, terminal);
+  }
+
+  /// Lists `terminal` right after the last of `neighbors` that `order` lists, in its folder or at
+  /// the top level. Lists nothing when none is listed. An earlier listing of `terminal` goes first
+  /// so an address appears once.
+  fn list_after(&mut self, neighbors: &[String], terminal: &str) {
+    self.unlist(terminal);
+    let last = self
+      .places()
+      .into_iter()
+      .rev()
+      .find_map(|place| match place {
+        Place::Terminal { address, folder } if neighbors.iter().any(|n| n == address) => {
+          Some((address.to_string(), folder))
+        }
+        _ => None,
+      });
+    let Some((after, folder)) = last else {
+      return;
+    };
+    let slot = |known: &Slot| matches!(known, Slot::Terminal(a) if *a == after);
+    match folder {
+      None => {
+        if let Some(index) = self.order.iter().position(slot) {
+          self
+            .order
+            .insert(index + 1, Slot::Terminal(terminal.into()));
+        }
+      }
+      Some(id) => {
+        for known in &mut self.order {
+          if let Slot::Folder(folder) = known
+            && folder.id == id
+            && let Some(index) = folder.terminals.iter().position(|a| *a == after)
+          {
+            folder.terminals.insert(index + 1, terminal.into());
+          }
+        }
+      }
+    }
+  }
+
+  /// Drops every listing of `terminal` from `order`; folders stay even when empty.
+  fn unlist(&mut self, terminal: &str) {
+    self
+      .order
+      .retain(|slot| !matches!(slot, Slot::Terminal(known) if known == terminal));
+    for slot in &mut self.order {
+      if let Slot::Folder(folder) = slot {
+        folder.terminals.retain(|known| known != terminal);
+      }
     }
   }
 
@@ -440,30 +494,27 @@ impl Layout {
     }
   }
 
-  /// The terminal is gone from the core: drop its panes everywhere.
+  /// The terminal is gone from the core: drop its place and name. Its panes are left to
+  /// `stop_showing`.
   pub fn forget(&mut self, terminal: &str) {
-    self
-      .order
-      .retain(|slot| !matches!(slot, Slot::Terminal(known) if known == terminal));
-    for slot in &mut self.order {
-      if let Slot::Folder(folder) = slot {
-        folder.terminals.retain(|known| known != terminal);
-      }
-    }
+    self.unlist(terminal);
     self.names.remove(terminal);
+  }
+
+  /// Drops the terminal's panes everywhere; its place and name stay.
+  pub fn stop_showing(&mut self, terminal: &str) {
     self.tabs.retain_mut(|tab| tab.forget(terminal));
     self.active_tab = self.active_tab.min(self.tabs.len().saturating_sub(1));
   }
 
-  /// Forgets every shown terminal not in `terminals`: its panes, its place in the sidebar order
-  /// and its name.
+  /// Stops showing every shown terminal not in `terminals`; their places and names stay.
   pub fn keep_only(&mut self, terminals: &[&str]) {
     let shown: Vec<String> = self.shown().into_iter().map(str::to_string).collect();
     for terminal in shown
       .iter()
       .filter(|shown| !terminals.contains(&shown.as_str()))
     {
-      self.forget(terminal);
+      self.stop_showing(terminal);
     }
   }
 
@@ -536,6 +587,64 @@ pub(crate) mod testing {
 mod tests {
   use super::testing::{folder, id, layout_with, top};
   use super::*;
+
+  #[test]
+  fn forgetting_a_terminal_drops_its_place_and_name_and_keeps_its_folder() {
+    let mut layout = layout_with(&[], vec![top("t1"), folder(1, false, &["t2"])]);
+    layout.names.insert("t2".into(), "logs".into());
+    layout.forget("t2");
+    assert_eq!(layout.order, vec![top("t1"), folder(1, false, &[])]);
+    assert!(layout.names.is_empty());
+  }
+
+  #[test]
+  fn stopping_showing_a_terminal_keeps_its_place_and_name() {
+    let mut layout = layout_with(&["t1", "t2"], vec![folder(1, false, &["t1"]), top("t2")]);
+    layout.names.insert("t1".into(), "server".into());
+    layout.stop_showing("t1");
+    assert_eq!(layout.shown(), vec!["t2"]);
+    assert_eq!(layout.active_tab, 0);
+    assert_eq!(layout.order, vec![folder(1, false, &["t1"]), top("t2")]);
+    assert_eq!(layout.names.get("t1").map(String::as_str), Some("server"));
+  }
+
+  #[test]
+  fn keeping_only_live_terminals_keeps_the_others_places() {
+    let mut layout = layout_with(&["t1", "t2"], vec![top("t1"), top("t2")]);
+    layout.keep_only(&["t2"]);
+    assert_eq!(layout.shown(), vec!["t2"]);
+    assert_eq!(layout.order, vec![top("t1"), top("t2")]);
+  }
+
+  #[test]
+  fn a_split_lists_its_terminal_after_the_tabs_last_listed_one() {
+    let mut layout = layout_with(&["t1"], vec![folder(1, false, &["t1", "t2"]), top("t9")]);
+    layout.split(Axis::Horizontal, "t3");
+    assert_eq!(
+      layout.order,
+      vec![folder(1, false, &["t1", "t3", "t2"]), top("t9")]
+    );
+    layout.focus("t1");
+    layout.split(Axis::Vertical, "t4");
+    assert_eq!(
+      layout.order,
+      vec![folder(1, false, &["t1", "t3", "t4", "t2"]), top("t9")]
+    );
+  }
+
+  #[test]
+  fn a_split_at_the_top_level_lists_its_terminal_there() {
+    let mut layout = layout_with(&["t1"], vec![top("t1"), top("t2")]);
+    layout.split(Axis::Horizontal, "t3");
+    assert_eq!(layout.order, vec![top("t1"), top("t3"), top("t2")]);
+  }
+
+  #[test]
+  fn a_split_of_an_unlisted_tab_lists_nothing() {
+    let mut layout = layout_with(&["t1"], vec![top("t2")]);
+    layout.split(Axis::Horizontal, "t3");
+    assert_eq!(layout.order, vec![top("t2")]);
+  }
 
   #[test]
   fn reads_a_layout_saved_before_folders() {
