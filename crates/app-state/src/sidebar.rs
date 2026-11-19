@@ -127,6 +127,177 @@ pub fn folder_of(items: &[SidebarItem], terminal: &str) -> Option<FolderId> {
   })
 }
 
+/// Which way a row or a folder moves in the sidebar.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Direction {
+  Up,
+  Down,
+}
+
+/// Moves a row one step. It swaps with its neighbor, but crosses a folder's edge when it meets
+/// one: it enters an open folder, leaves a folder at its first or last row, and jumps over a
+/// collapsed one. A row moved within a collapsed folder opens it. `None` when it can't move.
+pub fn moved_row(
+  items: &[SidebarItem],
+  row: &str,
+  direction: Direction,
+) -> Option<Vec<SidebarItem>> {
+  let mut items = items.to_vec();
+  let spot = locate(&items, row)?;
+  let up = direction == Direction::Up;
+  match spot.inner {
+    Some(at) => {
+      let rows = &mut folder_at(&mut items, spot.top).rows;
+      let next = if up { at.checked_sub(1) } else { Some(at + 1) };
+      match next.filter(|next| *next < rows.len()) {
+        Some(next) => {
+          rows.swap(at, next);
+          folder_at(&mut items, spot.top).collapsed = false;
+        }
+        None => {
+          let entry = rows.remove(at);
+          items.insert(spot.top + usize::from(!up), SidebarItem::Row(entry));
+        }
+      }
+    }
+    None => {
+      let next = if up {
+        spot.top.checked_sub(1)
+      } else {
+        Some(spot.top + 1)
+      };
+      let next = next.filter(|next| *next < items.len())?;
+      match &mut items[next] {
+        SidebarItem::Folder(folder) if !folder.collapsed => {
+          let SidebarItem::Row(entry) = items.remove(spot.top) else {
+            return None;
+          };
+          let folder = folder_at(&mut items, next - usize::from(!up));
+          if up {
+            folder.rows.push(entry);
+          } else {
+            folder.rows.insert(0, entry);
+          }
+        }
+        _ => items.swap(spot.top, next),
+      }
+    }
+  }
+  Some(items)
+}
+
+/// Swaps a folder with the top-level item next to it, a row or another folder.
+pub fn moved_folder(
+  items: &[SidebarItem],
+  id: FolderId,
+  direction: Direction,
+) -> Option<Vec<SidebarItem>> {
+  let at = items
+    .iter()
+    .position(|item| matches!(item, SidebarItem::Folder(folder) if folder.id == id))?;
+  let next = match direction {
+    Direction::Up => at.checked_sub(1)?,
+    Direction::Down => at + 1,
+  };
+  (next < items.len()).then(|| {
+    let mut items = items.to_vec();
+    items.swap(at, next);
+    items
+  })
+}
+
+/// An empty open folder at the end of the top level.
+pub fn with_new_folder(items: &[SidebarItem], id: FolderId, name: &str) -> Vec<SidebarItem> {
+  let mut items = items.to_vec();
+  items.push(new_folder(id, name, Vec::new()));
+  items
+}
+
+/// Moves a row into a new open folder: in the row's place, or right after its old folder.
+pub fn moved_to_new_folder(
+  items: &[SidebarItem],
+  row: &str,
+  id: FolderId,
+  name: &str,
+) -> Option<Vec<SidebarItem>> {
+  let spot = locate(items, row)?;
+  let (mut items, entry) = taken(items, row)?;
+  let at = spot.top + usize::from(spot.inner.is_some());
+  items.insert(at, new_folder(id, name, vec![entry]));
+  Some(items)
+}
+
+/// Moves a row to the end of a folder and opens it. `None` if it is already in that folder.
+pub fn moved_to_folder(items: &[SidebarItem], row: &str, id: FolderId) -> Option<Vec<SidebarItem>> {
+  if folder_of(items, row) == Some(id) {
+    return None;
+  }
+  let (mut items, entry) = taken(items, row)?;
+  let folder = items.iter_mut().find_map(|item| match item {
+    SidebarItem::Folder(folder) if folder.id == id => Some(folder),
+    _ => None,
+  })?;
+  folder.rows.push(entry);
+  folder.collapsed = false;
+  Some(items)
+}
+
+/// Moves a row out of its folder to the top level, right below it.
+pub fn removed_from_folder(items: &[SidebarItem], row: &str) -> Option<Vec<SidebarItem>> {
+  let spot = locate(items, row).filter(|spot| spot.inner.is_some())?;
+  let (mut items, entry) = taken(items, row)?;
+  items.insert(spot.top + 1, SidebarItem::Row(entry));
+  Some(items)
+}
+
+/// Where a row sits: its top-level index, and its index in that folder if it is in one.
+struct Spot {
+  top: usize,
+  inner: Option<usize>,
+}
+
+fn locate(items: &[SidebarItem], row: &str) -> Option<Spot> {
+  let holds = |entry: &Entry| entry.terminals().contains(&row);
+  items.iter().enumerate().find_map(|(top, item)| match item {
+    SidebarItem::Row(entry) => holds(entry).then_some(Spot { top, inner: None }),
+    SidebarItem::Folder(folder) => folder.rows.iter().position(holds).map(|at| Spot {
+      top,
+      inner: Some(at),
+    }),
+  })
+}
+
+/// A copy of `items` without the row, and the row itself.
+fn taken(items: &[SidebarItem], row: &str) -> Option<(Vec<SidebarItem>, Entry)> {
+  let spot = locate(items, row)?;
+  let mut items = items.to_vec();
+  let entry = match spot.inner {
+    Some(at) => folder_at(&mut items, spot.top).rows.remove(at),
+    None => match items.remove(spot.top) {
+      SidebarItem::Row(entry) => entry,
+      SidebarItem::Folder(_) => return None,
+    },
+  };
+  Some((items, entry))
+}
+
+/// The folder at a top-level index that `locate` or a folder check already vouched for.
+fn folder_at(items: &mut [SidebarItem], top: usize) -> &mut SidebarFolder {
+  match &mut items[top] {
+    SidebarItem::Folder(folder) => folder,
+    SidebarItem::Row(_) => unreachable!("the index names a folder"),
+  }
+}
+
+fn new_folder(id: FolderId, name: &str, rows: Vec<Entry>) -> SidebarItem {
+  SidebarItem::Folder(SidebarFolder {
+    id,
+    name: name.to_string(),
+    collapsed: false,
+    rows,
+  })
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -248,5 +419,154 @@ mod tests {
     assert_eq!(find_row(&items, "t9"), None);
     assert_eq!(folder_of(&items, "t2"), Some(id(1)));
     assert_eq!(folder_of(&items, "t1"), None);
+  }
+
+  #[test]
+  fn moving_up_follows_the_folder_rules() {
+    let up = |items: Vec<SidebarItem>, moving: &str| moved_row(&items, moving, Direction::Up);
+    // In a folder, not first: swaps with the row above.
+    assert_eq!(
+      up(vec![in_folder(1, false, &["t1", "t2"])], "t2"),
+      Some(vec![in_folder(1, false, &["t2", "t1"])])
+    );
+    // In a folder, first: leaves it and sits right above it.
+    assert_eq!(
+      up(vec![row("t0"), in_folder(1, false, &["t1", "t2"])], "t1"),
+      Some(vec![row("t0"), row("t1"), in_folder(1, false, &["t2"])])
+    );
+    // Below an open folder, empty or not: goes in last.
+    assert_eq!(
+      up(vec![in_folder(1, false, &["t1"]), row("t2")], "t2"),
+      Some(vec![in_folder(1, false, &["t1", "t2"])])
+    );
+    assert_eq!(
+      up(vec![in_folder(1, false, &[]), row("t2")], "t2"),
+      Some(vec![in_folder(1, false, &["t2"])])
+    );
+    // Below a collapsed folder: jumps above it and stays at the top level.
+    assert_eq!(
+      up(vec![in_folder(1, true, &["t1"]), row("t2")], "t2"),
+      Some(vec![row("t2"), in_folder(1, true, &["t1"])])
+    );
+    // Below a row: swaps, as today. First at the top level: can't move.
+    assert_eq!(
+      up(vec![row("t1"), row("t2")], "t2"),
+      Some(vec![row("t2"), row("t1")])
+    );
+    assert_eq!(up(vec![row("t1"), row("t2")], "t1"), None);
+  }
+
+  #[test]
+  fn moving_down_mirrors_moving_up() {
+    let down = |items: Vec<SidebarItem>, moving: &str| moved_row(&items, moving, Direction::Down);
+    assert_eq!(
+      down(vec![in_folder(1, false, &["t1", "t2"])], "t1"),
+      Some(vec![in_folder(1, false, &["t2", "t1"])])
+    );
+    assert_eq!(
+      down(vec![in_folder(1, false, &["t1", "t2"]), row("t3")], "t2"),
+      Some(vec![in_folder(1, false, &["t1"]), row("t2"), row("t3")])
+    );
+    assert_eq!(
+      down(vec![row("t1"), in_folder(1, false, &["t2"])], "t1"),
+      Some(vec![in_folder(1, false, &["t1", "t2"])])
+    );
+    assert_eq!(
+      down(vec![row("t1"), in_folder(1, false, &[])], "t1"),
+      Some(vec![in_folder(1, false, &["t1"])])
+    );
+    assert_eq!(
+      down(vec![row("t1"), in_folder(1, true, &["t2"])], "t1"),
+      Some(vec![in_folder(1, true, &["t2"]), row("t1")])
+    );
+    assert_eq!(
+      down(vec![row("t1"), row("t2")], "t1"),
+      Some(vec![row("t2"), row("t1")])
+    );
+    assert_eq!(down(vec![row("t1"), row("t2")], "t2"), None);
+  }
+
+  #[test]
+  fn moving_within_a_collapsed_folder_opens_it() {
+    assert_eq!(
+      moved_row(&[in_folder(1, true, &["t1", "t2"])], "t2", Direction::Up),
+      Some(vec![in_folder(1, false, &["t2", "t1"])])
+    );
+  }
+
+  #[test]
+  fn a_folder_swaps_with_the_line_next_to_it() {
+    let items = vec![
+      row("t1"),
+      in_folder(1, false, &["t2"]),
+      in_folder(2, true, &[]),
+    ];
+    assert_eq!(
+      moved_folder(&items, id(1), Direction::Up),
+      Some(vec![
+        in_folder(1, false, &["t2"]),
+        row("t1"),
+        in_folder(2, true, &[])
+      ])
+    );
+    assert_eq!(
+      moved_folder(&items, id(1), Direction::Down),
+      Some(vec![
+        row("t1"),
+        in_folder(2, true, &[]),
+        in_folder(1, false, &["t2"])
+      ])
+    );
+    assert_eq!(moved_folder(&items, id(2), Direction::Down), None);
+    assert_eq!(moved_folder(&items[1..], id(1), Direction::Up), None);
+  }
+
+  #[test]
+  fn a_new_folder_takes_the_rows_place_or_follows_its_old_folder() {
+    assert_eq!(
+      moved_to_new_folder(&[row("t1"), row("t2")], "t2", id(3), "f3"),
+      Some(vec![row("t1"), in_folder(3, false, &["t2"])])
+    );
+    assert_eq!(
+      moved_to_new_folder(
+        &[in_folder(1, false, &["t1", "t2"]), row("t3")],
+        "t1",
+        id(2),
+        "f2"
+      ),
+      Some(vec![
+        in_folder(1, false, &["t2"]),
+        in_folder(2, false, &["t1"]),
+        row("t3")
+      ])
+    );
+  }
+
+  #[test]
+  fn moving_to_a_folder_puts_the_row_last_and_opens_it() {
+    let items = vec![row("t1"), in_folder(1, true, &["t2"])];
+    assert_eq!(
+      moved_to_folder(&items, "t1", id(1)),
+      Some(vec![in_folder(1, false, &["t2", "t1"])])
+    );
+    assert_eq!(moved_to_folder(&items, "t2", id(1)), None);
+  }
+
+  #[test]
+  fn removing_from_a_folder_puts_the_row_right_below_it() {
+    let items = vec![in_folder(1, false, &["t1", "t2"]), row("t3")];
+    assert_eq!(
+      removed_from_folder(&items, "t1"),
+      Some(vec![in_folder(1, false, &["t2"]), row("t1"), row("t3")])
+    );
+    assert_eq!(removed_from_folder(&items, "t3"), None);
+  }
+
+  #[test]
+  fn a_new_empty_folder_goes_last_and_open() {
+    assert_eq!(
+      with_new_folder(&[in_folder(1, true, &[]), row("t1")], id(2), "f2"),
+      vec![in_folder(1, true, &[]), row("t1"), in_folder(2, false, &[])]
+    );
   }
 }

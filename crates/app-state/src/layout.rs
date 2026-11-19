@@ -413,6 +413,58 @@ impl Layout {
     }
   }
 
+  /// The folder with this id.
+  pub fn folder(&self, id: FolderId) -> Option<&Folder> {
+    self.order.iter().find_map(|slot| match slot {
+      Slot::Folder(folder) if folder.id == id => Some(folder),
+      _ => None,
+    })
+  }
+
+  fn folder_mut(&mut self, id: FolderId) -> Option<&mut Folder> {
+    self.order.iter_mut().find_map(|slot| match slot {
+      Slot::Folder(folder) if folder.id == id => Some(folder),
+      _ => None,
+    })
+  }
+
+  /// One more than the largest id in `order`, or 1 when there is none.
+  pub fn next_folder_id(&self) -> FolderId {
+    let largest = self.order.iter().filter_map(|slot| match slot {
+      Slot::Folder(folder) => Some(folder.id.0),
+      Slot::Terminal(_) => None,
+    });
+    FolderId(largest.max().map_or(1, |largest| largest + 1))
+  }
+
+  /// Trimmed; a blank name keeps the current one, because a folder always has a name.
+  pub fn rename_folder(&mut self, id: FolderId, name: &str) {
+    let name = name.trim();
+    if let Some(folder) = self.folder_mut(id).filter(|_| !name.is_empty()) {
+      folder.name = name.to_string();
+    }
+  }
+
+  /// Collapses an open folder and opens a collapsed one.
+  pub fn toggle_folder(&mut self, id: FolderId) {
+    if let Some(folder) = self.folder_mut(id) {
+      folder.collapsed = !folder.collapsed;
+    }
+  }
+
+  /// Its terminals take its place at the top level, in their order. No terminal is affected.
+  pub fn delete_folder(&mut self, id: FolderId) {
+    self.order = std::mem::take(&mut self.order)
+      .into_iter()
+      .flat_map(|slot| match slot {
+        Slot::Folder(folder) if folder.id == id => {
+          folder.terminals.into_iter().map(Slot::Terminal).collect()
+        }
+        other => vec![other],
+      })
+      .collect();
+  }
+
   /// Writes the sidebar as shown back to `order`: one slot per terminal, folders with their rows.
   /// Terminals the sidebar doesn't show drop out.
   pub fn arrange(&mut self, items: &[SidebarItem]) {
@@ -866,6 +918,49 @@ mod tests {
           folder: None
         },
       ]
+    );
+  }
+
+  #[test]
+  fn a_new_folder_id_is_one_more_than_the_largest() {
+    assert_eq!(layout_with(&[], Vec::new()).next_folder_id(), id(1));
+    let layout = layout_with(
+      &[],
+      vec![folder(4, false, &[]), top("t1"), folder(2, false, &[])],
+    );
+    assert_eq!(layout.next_folder_id(), id(5));
+  }
+
+  #[test]
+  fn renaming_a_folder_trims_and_a_blank_name_keeps_the_old_one() {
+    let mut layout = layout_with(&[], vec![folder(1, false, &[])]);
+    layout.rename_folder(id(1), "  api  ");
+    layout.rename_folder(id(1), "   ");
+    assert_eq!(
+      layout.folder(id(1)).map(|folder| folder.name.as_str()),
+      Some("api")
+    );
+  }
+
+  #[test]
+  fn toggling_a_folder_collapses_then_opens_it() {
+    let mut layout = layout_with(&[], vec![folder(1, false, &[])]);
+    layout.toggle_folder(id(1));
+    assert_eq!(layout.order, vec![folder(1, true, &[])]);
+    layout.toggle_folder(id(1));
+    assert_eq!(layout.order, vec![folder(1, false, &[])]);
+  }
+
+  #[test]
+  fn deleting_a_folder_leaves_its_terminals_where_it_was() {
+    let mut layout = layout_with(
+      &[],
+      vec![top("t1"), folder(1, true, &["t2", "t3"]), top("t4")],
+    );
+    layout.delete_folder(id(1));
+    assert_eq!(
+      layout.order,
+      vec![top("t1"), top("t2"), top("t3"), top("t4")]
     );
   }
 }
