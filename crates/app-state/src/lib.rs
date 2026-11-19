@@ -152,18 +152,6 @@ impl Entry {
   }
 }
 
-/// Rows in the order the user arranged, else the core's: what a tab shows never moves it.
-/// Folders are flattened away.
-pub fn sidebar_entries(layout: &layout::Layout, terminals: &Terminals) -> Vec<Entry> {
-  sidebar::sidebar_items(layout, terminals)
-    .into_iter()
-    .flat_map(|item| match item {
-      sidebar::SidebarItem::Row(entry) => vec![entry],
-      sidebar::SidebarItem::Folder(folder) => folder.rows,
-    })
-    .collect()
-}
-
 /// What a sidebar row reads: the user's name for it, else its (focused) terminal's.
 pub fn entry_label(layout: &layout::Layout, terminals: &Terminals, entry: &Entry) -> String {
   let (custom, address) = match entry {

@@ -2,6 +2,7 @@
 //! Closing a pane only stops showing its terminal; the terminal lives on in the core.
 
 use std::collections::BTreeMap;
+use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
@@ -239,6 +240,13 @@ impl Tab {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct FolderId(u32);
+
+/// The bare number, for element ids.
+impl fmt::Display for FolderId {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "{}", self.0)
+  }
+}
 
 /// A named group of sidebar rows, kept in Visr's layout only.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -538,21 +546,6 @@ impl Layout {
       Place::Folder(_) => true,
     });
     places
-  }
-
-  /// Moves the sidebar row at `from` to `to`, given the rows as shown.
-  pub fn move_entry(&mut self, entries: &[crate::Entry], from: usize, to: usize) {
-    let mut entries = entries.to_vec();
-    if from >= entries.len() || to >= entries.len() {
-      return;
-    }
-    let moved = entries.remove(from);
-    entries.insert(to, moved);
-    self.order = entries
-      .iter()
-      .flat_map(|entry| entry.terminals())
-      .map(|address| Slot::Terminal(address.to_string()))
-      .collect();
   }
 
   /// Names a sidebar row for this view only; the terminals keep theirs. Blank clears it.

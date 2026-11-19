@@ -1,19 +1,21 @@
-//! The sidebar: its rows, the context menu, renaming and reordering.
+//! The sidebar: its rows and folders, the context menu, renaming and reordering.
 
 use super::*;
 
 /// What a row does when opened, with the workspace it acts on.
 type OnOpen = Box<dyn Fn(&mut Workspace, &mut Window, &mut Context<Workspace>)>;
 
-/// One sidebar row's content: what `sidebar_row` draws.
+/// One sidebar line's content, a row's or a folder's: what `sidebar_row` draws.
 struct SidebarRow {
-  /// Names the row: its first terminal's address.
-  row: String,
+  key: SidebarKey,
   icon: AnyElement,
   name: String,
-  dot: Indicator,
+  /// `None` keeps the dot's room empty.
+  dot: Option<Indicator>,
   is_active: bool,
   is_live: bool,
+  /// Indents the row under its folder's name.
+  in_folder: bool,
   /// What clicking the row does.
   on_open: Option<OnOpen>,
 }
@@ -28,33 +30,47 @@ pub(super) fn indicator_color(indicator: Indicator, colors: Colors) -> Hsla {
   }
 }
 
-/// A sidebar row is known by its first terminal.
-pub(super) fn row_key(entry: &Entry) -> Option<&str> {
-  entry.terminals().first().copied()
+/// The sidebar's lines on screen: top-level rows, folders, and the rows of open folders.
+pub(super) fn visible_keys(items: &[SidebarItem]) -> HashSet<SidebarKey> {
+  let mut keys = HashSet::new();
+  for item in items {
+    match item {
+      SidebarItem::Row(entry) => keys.extend(row_key(entry)),
+      SidebarItem::Folder(folder) => {
+        keys.insert(SidebarKey::Folder(folder.id));
+        if !folder.collapsed {
+          keys.extend(folder.rows.iter().filter_map(row_key));
+        }
+      }
+    }
+  }
+  keys
 }
 
 impl Workspace {
-  /// The row a terminal is in, and where it sits.
-  pub(super) fn find_row(&self, row: &str) -> Option<(usize, Entry)> {
-    sidebar_entries(&self.layout, &self.terminals)
-      .into_iter()
-      .enumerate()
-      .find(|(_, entry)| entry.terminals().contains(&row))
+  /// The active tab's row: its first terminal.
+  pub(super) fn active_row(&self) -> Option<String> {
+    let tab = self.layout.active()?;
+    tab.root.leaves().first().map(|first| first.to_string())
   }
 
-  pub(super) fn move_row(&mut self, row: &str, step: isize) {
-    let Some((from, _)) = self.find_row(row) else {
-      return;
-    };
-    let entries = sidebar_entries(&self.layout, &self.terminals);
-    if let Some(to) = from.checked_add_signed(step) {
-      self.layout.move_entry(&entries, from, to);
+  /// The row a terminal is in, at the top level or in a folder.
+  pub(super) fn find_row(&self, row: &str) -> Option<Entry> {
+    find_row(&sidebar_items(&self.layout, &self.terminals), row).cloned()
+  }
+
+  /// Moves a row one step, into and out of folders as it meets their edges; nothing when it
+  /// can't move.
+  pub(super) fn move_row(&mut self, row: &str, direction: Direction) {
+    let items = sidebar_items(&self.layout, &self.terminals);
+    if let Some(items) = moved_row(&items, row, direction) {
+      self.layout.arrange(&items);
     }
   }
 
   /// Ends every terminal in the row: a tab's panes, or the one loose terminal.
   pub(super) fn close_row(&mut self, row: &str, cx: &mut Context<Self>) {
-    if let Some((_, entry)) = self.find_row(row) {
+    if let Some(entry) = self.find_row(row) {
       for address in entry.terminals() {
         self.close_address(address);
       }
@@ -63,7 +79,7 @@ impl Workspace {
   }
 
   pub(super) fn start_rename(&mut self, row: &str, window: &mut Window, cx: &mut Context<Self>) {
-    let Some((_, entry)) = self.find_row(row) else {
+    let Some(entry) = self.find_row(row) else {
       return;
     };
     let text = entry_label(&self.layout, &self.terminals, &entry);
@@ -102,30 +118,36 @@ impl Workspace {
       return;
     };
     if let Some(name) = name
-      && let Some((_, entry)) = self.find_row(&renaming.row)
+      && let Some(entry) = self.find_row(&renaming.row)
     {
       self.layout.rename(&entry, &name);
     }
     self.changed(window, cx);
   }
 
-  /// Draws the parts every sidebar row shares.
+  /// Draws the parts every sidebar line shares. Only a row has a menu, a close button and a name
+  /// to edit; a folder's line keeps the close button's room, so the dots line up.
   fn sidebar_row(&self, content: SidebarRow, cx: &mut Context<Self>) -> AnyElement {
     let colors = Colors::active(cx);
     let SidebarRow {
-      row,
+      key,
       icon,
       name,
       dot,
       is_active,
       is_live,
+      in_folder,
       on_open,
     } = content;
+    let (id, row) = match key {
+      SidebarKey::Row(row) => (format!("row-{row}"), Some(row)),
+      SidebarKey::Folder(folder) => (format!("folder-{folder}"), None),
+    };
     let dim = colors.text_muted;
     let renaming = self
       .renaming
       .as_ref()
-      .filter(|renaming| renaming.row == row);
+      .filter(|renaming| row.as_ref() == Some(&renaming.row));
     let label = match renaming {
       Some(renaming) => {
         let field = renaming.field.clone();
@@ -151,34 +173,56 @@ impl Workspace {
         .when(!is_live, |name| name.text_color(dim))
         .child(name),
     };
-    let menu_row = row.clone();
-    let closing = row.clone();
-    div()
-      .id(SharedString::from(format!("row-{row}")))
-      .group("row")
-      .mx_2()
-      .px_2()
-      .h(px(ROW_HEIGHT))
+    let close_slot = div()
+      .h(px(20.0))
+      .min_w(px(20.0))
       .flex()
       .items_center()
-      .gap_2()
+      .justify_center()
+      .rounded_md()
+      .text_color(dim);
+    let close = match row.clone() {
+      Some(closing) => close_slot
+        .id(SharedString::from(format!("close-{closing}")))
+        .hover(|button| button.bg(colors.surface_hover_strong))
+        // A live row shows its close button on hover only; a finished one always offers rm.
+        .when(is_live, |button| {
+          button
+            .opacity(0.0)
+            .group_hover("row", |button| button.opacity(1.0))
+            .child(close_icon(dim))
+        })
+        .when(!is_live, |button| button.px_1().child("rm"))
+        .on_click(cx.listener(move |workspace, _, _, cx| {
+          cx.stop_propagation();
+          workspace.close_row(&closing, cx);
+        }))
+        .into_any_element(),
+      None => close_slot.into_any_element(),
+    };
+    sidebar_line()
+      .id(SharedString::from(id))
+      .group("row")
       .rounded_lg()
-      .when(is_active, |row| row.bg(colors.surface_active))
-      .hover(|row| row.bg(colors.surface_hover))
-      .when_some(on_open, |row, on_open| {
-        row.on_click(cx.listener(move |workspace, _, window, cx| on_open(workspace, window, cx)))
+      .when(is_active, |line| line.bg(colors.surface_active))
+      .hover(|line| line.bg(colors.surface_hover))
+      .when_some(on_open, |line, on_open| {
+        line.on_click(cx.listener(move |workspace, _, window, cx| on_open(workspace, window, cx)))
       })
-      .on_mouse_down(
-        MouseButton::Right,
-        cx.listener(move |workspace, event: &MouseDownEvent, _, cx| {
-          workspace.menu = Some(RowMenu {
-            position: event.position,
-            row: menu_row.clone(),
-            shown: Tween::new(0.0, 1.0, Instant::now(), motion::duration()),
-          });
-          cx.notify();
-        }),
-      )
+      .when_some(row, |line, menu_row| {
+        line.on_mouse_down(
+          MouseButton::Right,
+          cx.listener(move |workspace, event: &MouseDownEvent, _, cx| {
+            workspace.menu = Some(RowMenu {
+              position: event.position,
+              row: menu_row.clone(),
+              shown: Tween::new(0.0, 1.0, Instant::now(), motion::duration()),
+            });
+            cx.notify();
+          }),
+        )
+      })
+      .when(in_folder, |line| line.child(indent()))
       .child(icon)
       .child(label)
       .child(
@@ -186,32 +230,9 @@ impl Workspace {
           .size(px(6.0))
           .flex_none()
           .rounded_full()
-          .bg(indicator_color(dot, colors)),
+          .when_some(dot, |slot, dot| slot.bg(indicator_color(dot, colors))),
       )
-      .child(
-        div()
-          .id(SharedString::from(format!("close-{row}")))
-          .h(px(20.0))
-          .min_w(px(20.0))
-          .flex()
-          .items_center()
-          .justify_center()
-          .rounded_md()
-          .text_color(dim)
-          .hover(|button| button.bg(colors.surface_hover_strong))
-          // A live row shows its close button on hover only; a finished one always offers rm.
-          .when(is_live, |button| {
-            button
-              .opacity(0.0)
-              .group_hover("row", |button| button.opacity(1.0))
-              .child(close_icon(dim))
-          })
-          .when(!is_live, |button| button.px_1().child("rm"))
-          .on_click(cx.listener(move |workspace, _, _, cx| {
-            cx.stop_propagation();
-            workspace.close_row(&closing, cx);
-          })),
-      )
+      .child(close)
       .into_any_element()
   }
 
@@ -219,20 +240,18 @@ impl Workspace {
     &self,
     entry: &Entry,
     index: usize,
+    in_folder: bool,
     cx: &mut Context<Self>,
   ) -> AnyElement {
     let colors = Colors::active(cx);
     let members = entry.terminals();
-    let dots: Vec<Indicator> = members
-      .iter()
-      .filter_map(|address| self.terminals.get(address))
-      .map(indicator)
-      .collect();
     // The stack's dot is its most urgent pane's.
-    let dot = [Indicator::NeedsYou, Indicator::Working, Indicator::Done]
-      .into_iter()
-      .find(|urgent| dots.contains(urgent))
-      .unwrap_or(Indicator::Quiet);
+    let dot = most_urgent(
+      members
+        .iter()
+        .filter_map(|address| self.terminals.get(address))
+        .map(indicator),
+    );
     let icon = if members.len() > 1 {
       stack_icon(StackColors {
         shell: shell_colors(colors),
@@ -243,15 +262,18 @@ impl Workspace {
       shell_icon(shell_colors(colors)).into_any_element()
     };
     let content = SidebarRow {
-      row: members
-        .first()
-        .map(|first| first.to_string())
-        .unwrap_or_default(),
+      key: SidebarKey::Row(
+        members
+          .first()
+          .map(|first| first.to_string())
+          .unwrap_or_default(),
+      ),
       icon,
       name: entry_label(&self.layout, &self.terminals, entry),
-      dot,
+      dot: Some(dot),
       is_active: index == self.layout.active_tab,
       is_live: true,
+      in_folder,
       on_open: Some(Box::new(move |workspace, window, cx| {
         workspace.layout.select_tab(index);
         workspace.changed(window, cx);
@@ -264,18 +286,20 @@ impl Workspace {
     &self,
     entry: &Entry,
     terminal: &Terminal,
+    in_folder: bool,
     cx: &mut Context<Self>,
   ) -> AnyElement {
     let colors = Colors::active(cx);
     let address = terminal.address.clone();
     let is_live = terminal.state == TerminalState::Live;
     let content = SidebarRow {
-      row: address.clone(),
+      key: SidebarKey::Row(address.clone()),
       icon: shell_icon(shell_colors(colors)).into_any_element(),
       name: entry_label(&self.layout, &self.terminals, entry),
-      dot: indicator(terminal),
+      dot: Some(indicator(terminal)),
       is_active: false,
       is_live,
+      in_folder,
       on_open: is_live.then(|| -> OnOpen {
         Box::new(move |workspace, window, cx| {
           workspace.layout.show(&address);
@@ -286,21 +310,59 @@ impl Workspace {
     self.sidebar_row(content, cx)
   }
 
-  pub(super) fn render_menu(&self, menu: &RowMenu, cx: &mut Context<Self>) -> impl IntoElement {
-    let rows = sidebar_entries(&self.layout, &self.terminals);
-    let position = rows
+  /// A folder's line; a click opens or collapses it. Collapsed, it stands in for its rows: it
+  /// shows their most urgent dot, and the active tab's highlight when that tab is one of them.
+  fn render_folder_row(&self, folder: &SidebarFolder, cx: &mut Context<Self>) -> AnyElement {
+    let colors = Colors::active(cx);
+    let icon = if folder.collapsed {
+      ICON_FOLDER
+    } else {
+      ICON_FOLDER_OPENED
+    };
+    let dot = folder.collapsed.then(|| {
+      most_urgent(
+        folder
+          .rows
+          .iter()
+          .flat_map(Entry::terminals)
+          .filter_map(|address| self.terminals.get(address))
+          .map(indicator),
+      )
+    });
+    let holds_active_tab = folder
+      .rows
       .iter()
-      .position(|entry| entry.terminals().contains(&menu.row.as_str()));
-    let can_move_up = position.is_some_and(|position| position > 0);
-    let can_move_down = position.is_some_and(|position| position + 1 < rows.len());
-    let noun = match self.find_row(&menu.row) {
-      Some((_, Entry::Loose(_))) => "Terminal",
+      .any(|entry| matches!(entry, Entry::Tab { index, .. } if *index == self.layout.active_tab));
+    let id = folder.id;
+    let content = SidebarRow {
+      key: SidebarKey::Folder(id),
+      icon: glyph(icon, colors),
+      name: folder.name.clone(),
+      dot,
+      is_active: folder.collapsed && holds_active_tab,
+      is_live: true,
+      in_folder: false,
+      on_open: Some(Box::new(move |workspace, window, cx| {
+        workspace.layout.toggle_folder(id);
+        workspace.changed(window, cx);
+      })),
+    };
+    self.sidebar_row(content, cx)
+  }
+
+  pub(super) fn render_menu(&self, menu: &RowMenu, cx: &mut Context<Self>) -> impl IntoElement {
+    let items = sidebar_items(&self.layout, &self.terminals);
+    let can_move_up = moved_row(&items, &menu.row, Direction::Up).is_some();
+    let can_move_down = moved_row(&items, &menu.row, Direction::Down).is_some();
+    let entry = find_row(&items, &menu.row);
+    let noun = match entry {
+      Some(Entry::Loose(_)) => "Terminal",
       _ => "Tab",
     };
     // The shortcuts act on the active tab, so only that tab's row shows them.
     let is_active_tab = matches!(
-      self.find_row(&menu.row),
-      Some((_, Entry::Tab { index, .. })) if index == self.layout.active_tab
+      entry,
+      Some(Entry::Tab { index, .. }) if *index == self.layout.active_tab
     );
     let shortcut = |action| is_active_tab.then(|| self.shortcut(action)).flatten();
     let rename_row = menu.row.clone();
@@ -349,7 +411,7 @@ impl Workspace {
         .when(can_move_up, |item| {
           item.on_click(cx.listener(move |workspace, _, window, cx| {
             workspace.menu = None;
-            workspace.move_row(&up_row, -1);
+            workspace.move_row(&up_row, Direction::Up);
             workspace.changed(window, cx);
           }))
         }),
@@ -365,7 +427,7 @@ impl Workspace {
         .when(can_move_down, |item| {
           item.on_click(cx.listener(move |workspace, _, window, cx| {
             workspace.menu = None;
-            workspace.move_row(&down_row, 1);
+            workspace.move_row(&down_row, Direction::Down);
             workspace.changed(window, cx);
           }))
         }),
@@ -453,31 +515,25 @@ impl Workspace {
       })
       .collect();
     let now = Instant::now();
-    let rows: Vec<AnyElement> = sidebar_entries(&self.layout, &self.terminals)
-      .iter()
-      .filter_map(|entry| {
-        let row = match entry {
-          Entry::Tab { index, .. } => self.render_tab_row(entry, *index, cx),
-          Entry::Loose(address) => {
-            let terminal = self.terminals.get(address)?.clone();
-            self.render_loose_row(entry, &terminal, cx)
+    let mut lines = Vec::new();
+    for item in &sidebar_items(&self.layout, &self.terminals) {
+      match item {
+        SidebarItem::Row(entry) => lines.extend(self.render_entry(entry, false, now, cx)),
+        SidebarItem::Folder(folder) => {
+          let line = self.render_folder_row(folder, cx);
+          lines.push(self.grow_in(&SidebarKey::Folder(folder.id), line, now));
+          if folder.collapsed {
+            continue;
           }
-        };
-        // A new row grows to its height and fades in.
-        let grown = row_key(entry)
-          .and_then(|key| self.row_motion.get(key))
-          .map_or(1.0, |tween| tween.value(now));
-        Some(
-          div()
-            .flex_none()
-            .h(px(ROW_HEIGHT * grown))
-            .opacity(grown)
-            .overflow_hidden()
-            .child(row)
-            .into_any_element(),
-        )
-      })
-      .collect();
+          if folder.rows.is_empty() {
+            lines.push(no_sessions(colors));
+          }
+          for entry in &folder.rows {
+            lines.extend(self.render_entry(entry, true, now, cx));
+          }
+        }
+      }
+    }
     div()
       .w(px(self.sidebar_drawn))
       .h_full()
@@ -497,10 +553,78 @@ impl Workspace {
           .gap_0p5()
           .overflow_y_scroll()
           .child(label)
-          .children(rows)
+          .children(lines)
           .children(templates),
       )
   }
+
+  /// A tab's or a loose terminal's row, growing in while new; `None` for a loose terminal the
+  /// core no longer has.
+  fn render_entry(
+    &self,
+    entry: &Entry,
+    in_folder: bool,
+    now: Instant,
+    cx: &mut Context<Self>,
+  ) -> Option<AnyElement> {
+    let row = match entry {
+      Entry::Tab { index, .. } => self.render_tab_row(entry, *index, in_folder, cx),
+      Entry::Loose(address) => {
+        let terminal = self.terminals.get(address)?.clone();
+        self.render_loose_row(entry, &terminal, in_folder, cx)
+      }
+    };
+    Some(self.grow_in(&row_key(entry)?, row, now))
+  }
+
+  /// A line new on the sidebar grows to its height and fades in.
+  fn grow_in(&self, key: &SidebarKey, line: AnyElement, now: Instant) -> AnyElement {
+    let grown = self
+      .row_motion
+      .get(key)
+      .map_or(1.0, |tween| tween.value(now));
+    div()
+      .flex_none()
+      .h(px(ROW_HEIGHT * grown))
+      .opacity(grown)
+      .overflow_hidden()
+      .child(line)
+      .into_any_element()
+  }
+}
+
+/// A sidebar row is known by its first terminal.
+fn row_key(entry: &Entry) -> Option<SidebarKey> {
+  let first = entry.terminals().first()?.to_string();
+  Some(SidebarKey::Row(first))
+}
+
+/// The frame of every sidebar line, so their icons and names line up.
+fn sidebar_line() -> gpui::Div {
+  div()
+    .mx_2()
+    .px_2()
+    .h(px(ROW_HEIGHT))
+    .flex()
+    .items_center()
+    .gap_2()
+}
+
+/// An empty icon's room before a nested line's content. With the line's gap after it, the
+/// content starts right under its folder's name.
+fn indent() -> gpui::Div {
+  div().size(px(ICON_BOX)).flex_none()
+}
+
+/// What an open folder with no rows shows under its name. It isn't a row, so it has no hover and
+/// no click.
+fn no_sessions(colors: Colors) -> AnyElement {
+  sidebar_line()
+    .flex_none()
+    .text_color(colors.text_muted)
+    .child(indent())
+    .child("No sessions")
+    .into_any_element()
 }
 
 /// The colors of a shell's icon in the sidebar.

@@ -159,14 +159,13 @@ impl Workspace {
         }
       }
       Action::MoveTabUp | Action::MoveTabDown => {
-        let active = self.layout.active_tab;
-        let row = sidebar_entries(&self.layout, &self.terminals)
-          .into_iter()
-          .find(|entry| matches!(entry, Entry::Tab { index, .. } if *index == active))
-          .and_then(|entry| entry.terminals().first().map(|first| first.to_string()));
-        if let Some(row) = row {
-          let step = if action == Action::MoveTabUp { -1 } else { 1 };
-          self.move_row(&row, step);
+        if let Some(row) = self.active_row() {
+          let direction = if action == Action::MoveTabUp {
+            Direction::Up
+          } else {
+            Direction::Down
+          };
+          self.move_row(&row, direction);
         }
       }
     }

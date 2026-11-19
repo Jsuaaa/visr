@@ -3,20 +3,18 @@
 use super::*;
 
 impl Workspace {
-  /// Grows in rows new to the sidebar, and drops the motions that are done.
+  /// Grows in lines new on the sidebar, as the rows of a folder just opened, and drops the
+  /// motions that are done.
   fn track_motion(&mut self, now: Instant) {
-    let rows: HashSet<String> = sidebar_entries(&self.layout, &self.terminals)
-      .iter()
-      .filter_map(|entry| row_key(entry).map(str::to_string))
-      .collect();
+    let lines = visible_keys(&sidebar_items(&self.layout, &self.terminals));
     if let Some(known) = &self.known_rows {
-      for row in rows.difference(known) {
+      for line in lines.difference(known) {
         let tween = Tween::new(0.0, 1.0, now, motion::duration());
-        self.row_motion.insert(row.clone(), tween);
+        self.row_motion.insert(line.clone(), tween);
       }
     }
     self.row_motion.retain(|_, tween| !tween.done(now));
-    self.known_rows = Some(rows);
+    self.known_rows = Some(lines);
   }
 }
 

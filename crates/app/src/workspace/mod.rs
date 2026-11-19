@@ -8,10 +8,13 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
-use app_state::layout::{Axis, Branch, Layout, Node, split_size};
+use app_state::layout::{Axis, Branch, FolderId, Layout, Node, split_size};
+use app_state::sidebar::{
+  Direction, SidebarFolder, SidebarItem, find_row, moved_row, sidebar_items,
+};
 use app_state::{
-  Entry, Indicator, Terminals, clean_exits, display_name, entry_label, indicator, panes_to_close,
-  sidebar_entries,
+  Entry, Indicator, Terminals, clean_exits, display_name, entry_label, indicator, most_urgent,
+  panes_to_close,
 };
 use config::{Action, Config, KeyPress, LoadedTheme, ThemeChoice};
 use gpui::{
@@ -34,10 +37,10 @@ use ui::menu::{MenuColors, menu_item, menu_item_icon, menu_separator};
 use ui::motion::{self, Tween};
 use ui::text_field::{FieldEvent, TextField, TextFieldColors};
 use ui::tokens::{
-  DIVIDER_WIDTH, HEADER_PADDING, PANE_BORDER_WIDTH, PANE_CHROME_HEIGHT, PANE_CHROME_WIDTH,
-  PANE_EDGE, PANE_HEADER_HEIGHT, PANE_PADDING_BOTTOM, PANE_PADDING_LEFT, PANE_RADIUS, ROW_HEIGHT,
-  ROW_INSET, TITLEBAR_BUTTON, TITLEBAR_HEIGHT, TITLEBAR_NUDGE, TOGGLE_GAP, TOGGLE_LEFT, TOGGLE_TOP,
-  WINDOW_GAP,
+  DIVIDER_WIDTH, HEADER_PADDING, ICON_BOX, PANE_BORDER_WIDTH, PANE_CHROME_HEIGHT,
+  PANE_CHROME_WIDTH, PANE_EDGE, PANE_HEADER_HEIGHT, PANE_PADDING_BOTTOM, PANE_PADDING_LEFT,
+  PANE_RADIUS, ROW_HEIGHT, ROW_INSET, TITLEBAR_BUTTON, TITLEBAR_HEIGHT, TITLEBAR_NUDGE, TOGGLE_GAP,
+  TOGGLE_LEFT, TOGGLE_TOP, WINDOW_GAP,
 };
 
 mod actions;
@@ -57,7 +60,7 @@ use changes::GitView;
 use config_watch::ConfigWatch;
 use panel::{OutputLook, PANEL_WIDTH, Panel, PanelSwitch, TreeState};
 use resize::{Edge, EdgeDrag};
-use sidebar::row_key;
+use sidebar::visible_keys;
 use toolbar::{TOOLBAR_HEIGHT, ToolbarMenu};
 
 use crate::SIDEBAR_WIDTH;
@@ -79,6 +82,14 @@ enum ConfigSeen {
   Missing,
   /// Last modified at this time.
   At(SystemTime),
+}
+
+/// A line of the sidebar: a row, known by its first terminal, or a folder, by its id. Rows
+/// move and tabs renumber, so neither is known by its place.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum SidebarKey {
+  Row(String),
+  Folder(FolderId),
 }
 
 /// The context menu of a sidebar row, open at `position`. A row is known by its first terminal,
@@ -192,10 +203,11 @@ pub(crate) struct Workspace {
   panes_area: Rc<RefCell<Option<Bounds<Pixels>>>>,
   /// The window coming in from the setup: the curtain of the window's color lifts.
   entrance: Tween,
-  /// Sidebar rows by their first terminal: those seen so far, and new ones growing in.
-  /// `None` until the first frame, so rows already there at start don't grow.
-  known_rows: Option<HashSet<String>>,
-  row_motion: HashMap<String, Tween>,
+  /// The sidebar's lines on screen: those seen so far, and new ones growing in. A folder's rows
+  /// are on screen only while it is open. `None` until the first frame, so lines already there
+  /// at start don't grow.
+  known_rows: Option<HashSet<SidebarKey>>,
+  row_motion: HashMap<SidebarKey, Tween>,
   /// Keeps the shortcuts working while no pane has the keyboard (no terminal is open).
   focus_handle: FocusHandle,
   config_seen: ConfigSeen,
@@ -440,6 +452,13 @@ fn menu_colors(colors: Colors) -> MenuColors {
 /// A title bar or toolbar button in the workspace's colors.
 fn chrome_button(id: &'static str, colors: Colors) -> gpui::Stateful<gpui::Div> {
   titlebar_button(id, colors.surface_hover).text_color(colors.text_muted)
+}
+
+fn glyph(icon: (&'static str, f32), colors: Colors) -> AnyElement {
+  div()
+    .text_color(colors.text_muted)
+    .child(glyph_icon(icon))
+    .into_any_element()
 }
 
 /// A double click on the title bar does what the system says: zoom the window by default.
