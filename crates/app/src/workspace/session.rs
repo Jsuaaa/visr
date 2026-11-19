@@ -72,7 +72,7 @@ impl Workspace {
         None => self.layout.stop_showing(address),
       }
     }
-    // A row being renamed keeps the keyboard until it is done.
+    // A row or folder being renamed keeps the keyboard until it is done.
     if self.renaming.is_none()
       && let Some(focused) = self.layout.focused()
       && let Some(pane) = self.panes.get(focused)

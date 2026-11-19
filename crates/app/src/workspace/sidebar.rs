@@ -70,7 +70,8 @@ impl Workspace {
     self.edit_sidebar(|items| moved_row(items, row, direction));
   }
 
-  /// Moves a row into a new folder in its place, and starts naming the folder.
+  /// Moves a row into a new folder and starts naming the folder. The folder takes the row's
+  /// place, or goes right after its folder when the row is already in one.
   pub(super) fn move_to_new_folder(
     &mut self,
     row: &str,

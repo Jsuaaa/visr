@@ -205,7 +205,7 @@ impl Workspace {
     window: &mut Window,
     cx: &mut Context<Self>,
   ) {
-    // A row being renamed is a text field: cmd-c, cmd-v and the rest are its own.
+    // A row or folder being renamed is a text field: cmd-c, cmd-v and the rest are its own.
     if self.renaming.is_some() {
       return;
     }

@@ -16,6 +16,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - A tab whose program ends stays where it was in the sidebar, instead of moving to the end
+- Renaming a terminal while no tab is open takes your typing right away, without a click
+  first
 
 ## [0.1.1] - 2026-11-16
 
