@@ -569,4 +569,29 @@ mod tests {
       vec![in_folder(1, true, &[]), row("t1"), in_folder(2, false, &[])]
     );
   }
+
+  #[test]
+  fn a_tab_moves_by_any_of_its_terminals() {
+    let tab = SidebarItem::Row(Entry::Tab {
+      index: 0,
+      terminals: vec!["t1".into(), "t2".into()],
+    });
+    assert_eq!(
+      moved_row(&[tab.clone(), row("t3")], "t2", Direction::Down),
+      Some(vec![row("t3"), tab])
+    );
+  }
+
+  #[test]
+  fn moving_into_a_missing_folder_does_nothing() {
+    assert_eq!(moved_to_folder(&[row("t1")], "t1", id(9)), None);
+  }
+
+  #[test]
+  fn leaving_a_collapsed_folder_keeps_it_collapsed() {
+    assert_eq!(
+      moved_row(&[in_folder(1, true, &["t1", "t2"])], "t2", Direction::Down),
+      Some(vec![in_folder(1, true, &["t1"]), row("t2")])
+    );
+  }
 }
