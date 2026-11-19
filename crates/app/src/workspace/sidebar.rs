@@ -382,7 +382,7 @@ impl Workspace {
   }
 
   /// A folder's line; a click opens or collapses it. Collapsed, it stands in for its rows: it
-  /// shows their most urgent dot, and the active tab's highlight when that tab is one of them.
+  /// shows their most urgent dot (none when empty), and the active tab's highlight when that tab is one of them.
   fn render_folder_row(&self, folder: &SidebarFolder, cx: &mut Context<Self>) -> AnyElement {
     let colors = Colors::active(cx);
     let icon = if folder.collapsed {
@@ -390,8 +390,7 @@ impl Workspace {
     } else {
       ICON_FOLDER_OPENED
     };
-    let dot = folder
-      .collapsed
+    let dot = (folder.collapsed && !folder.rows.is_empty())
       .then(|| most_urgent(folder.rows.iter().map(|entry| self.row_dot(entry))));
     let holds_active_tab = folder
       .rows
