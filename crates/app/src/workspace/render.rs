@@ -71,8 +71,13 @@ impl Render for Workspace {
       Some(tab) => self.render_node(&tab.root, Vec::new(), (true, true), cx),
       None => self.render_empty(cx),
     };
-    // With no pane to hold the keyboard, the window does, or no shortcut would get to run.
-    if self.layout.active().is_none() && !self.focus_handle.contains_focused(window, cx) {
+    // With no pane to hold the keyboard, the window does, or no shortcut would get to run. A
+    // rename's field holds it meanwhile: the check looks at the last frame, which a field just
+    // made isn't in yet.
+    if self.layout.active().is_none()
+      && self.renaming.is_none()
+      && !self.focus_handle.contains_focused(window, cx)
+    {
       window.focus(&self.focus_handle);
     }
     let config_error = self.config_error.as_ref().map(|error| {

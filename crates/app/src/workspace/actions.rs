@@ -168,6 +168,15 @@ impl Workspace {
           self.move_row(&row, direction);
         }
       }
+      Action::MoveToNewFolder => {
+        if let Some(row) = self.active_row() {
+          // The new folder's name is edited in the sidebar, so it has to be in sight.
+          if !self.sidebar_open {
+            self.toggle_sidebar();
+          }
+          self.move_to_new_folder(&row, window, cx);
+        }
+      }
     }
     self.changed(window, cx);
   }

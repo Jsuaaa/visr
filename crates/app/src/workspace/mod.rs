@@ -10,7 +10,8 @@ use std::time::{Duration, Instant, SystemTime};
 
 use app_state::layout::{Axis, Branch, FolderId, Layout, Node, split_size};
 use app_state::sidebar::{
-  Direction, SidebarFolder, SidebarItem, find_row, moved_row, sidebar_items,
+  Direction, SidebarFolder, SidebarItem, find_row, folder_of, moved_folder, moved_row,
+  moved_to_folder, moved_to_new_folder, removed_from_folder, sidebar_items, with_new_folder,
 };
 use app_state::{
   Entry, Indicator, Terminals, clean_exits, display_name, entry_label, indicator, most_urgent,
@@ -92,18 +93,27 @@ enum SidebarKey {
   Folder(FolderId),
 }
 
-/// The context menu of a sidebar row, open at `position`. A row is known by its first terminal,
-/// since rows move and tabs renumber while the menu is open.
-struct RowMenu {
+/// What a sidebar menu was opened on.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum MenuTarget {
+  /// A session row or a folder row.
+  Line(SidebarKey),
+  /// The sidebar outside any row.
+  Sidebar,
+}
+
+/// A context menu of the sidebar, open at `position`. A line is known by its key, since rows
+/// move and tabs renumber while the menu is open.
+struct SidebarMenu {
   position: Point<Pixels>,
-  row: String,
+  target: MenuTarget,
   /// Fades in.
   shown: Tween,
 }
 
-/// A sidebar row being renamed in place.
+/// A sidebar row or folder being renamed in place.
 struct Renaming {
-  row: String,
+  key: SidebarKey,
   field: Entity<TextField>,
   _events: Subscription,
 }
@@ -156,7 +166,7 @@ pub(crate) struct Workspace {
   theme_notice: Option<SharedString>,
   /// The connection to the core dropped and a new one is being tried.
   reconnecting: bool,
-  menu: Option<RowMenu>,
+  menu: Option<SidebarMenu>,
   toolbar_menu: Option<ToolbarMenu>,
   /// Where the toolbar's menu button was laid out, for the menu to open from.
   more_bounds: Rc<RefCell<Option<Bounds<Pixels>>>>,

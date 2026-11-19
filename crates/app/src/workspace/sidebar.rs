@@ -1,6 +1,11 @@
-//! The sidebar: its rows and folders, the context menu, renaming and reordering.
+//! The sidebar: its rows and folders, the context menus, renaming and reordering.
+
+use gpui::ClickEvent;
 
 use super::*;
+
+/// The name a folder starts with, until its rename ends.
+const NEW_FOLDER_NAME: &str = "New folder";
 
 /// What a row does when opened, with the workspace it acts on.
 type OnOpen = Box<dyn Fn(&mut Workspace, &mut Window, &mut Context<Workspace>)>;
@@ -62,10 +67,56 @@ impl Workspace {
   /// Moves a row one step, into and out of folders as it meets their edges; nothing when it
   /// can't move.
   pub(super) fn move_row(&mut self, row: &str, direction: Direction) {
-    let items = sidebar_items(&self.layout, &self.terminals);
-    if let Some(items) = moved_row(&items, row, direction) {
-      self.layout.arrange(&items);
+    self.edit_sidebar(|items| moved_row(items, row, direction));
+  }
+
+  /// Moves a row into a new folder in its place, and starts naming the folder.
+  pub(super) fn move_to_new_folder(
+    &mut self,
+    row: &str,
+    window: &mut Window,
+    cx: &mut Context<Self>,
+  ) {
+    let id = self.layout.next_folder_id();
+    if self.edit_sidebar(|items| moved_to_new_folder(items, row, id, NEW_FOLDER_NAME)) {
+      self.start_rename(SidebarKey::Folder(id), window, cx);
     }
+  }
+
+  /// Adds an empty folder at the end of the sidebar, and starts naming it.
+  fn new_folder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    let id = self.layout.next_folder_id();
+    self.edit_sidebar(|items| Some(with_new_folder(items, id, NEW_FOLDER_NAME)));
+    self.start_rename(SidebarKey::Folder(id), window, cx);
+  }
+
+  /// Moves a row to the end of a folder, and opens it.
+  fn move_to_folder(&mut self, row: &str, id: FolderId) {
+    self.edit_sidebar(|items| moved_to_folder(items, row, id));
+  }
+
+  /// Moves a row out of its folder, to right below it.
+  fn remove_from_folder(&mut self, row: &str) {
+    self.edit_sidebar(|items| removed_from_folder(items, row));
+  }
+
+  /// Swaps a folder with the line next to it at the top level.
+  fn move_folder(&mut self, id: FolderId, direction: Direction) {
+    self.edit_sidebar(|items| moved_folder(items, id, direction));
+  }
+
+  /// Lays out the sidebar as `edit` rearranges it; says whether the edit could happen. The
+  /// caller runs `changed`, which saves it.
+  fn edit_sidebar(
+    &mut self,
+    edit: impl FnOnce(&[SidebarItem]) -> Option<Vec<SidebarItem>>,
+  ) -> bool {
+    let items = sidebar_items(&self.layout, &self.terminals);
+    let Some(items) = edit(&items) else {
+      return false;
+    };
+    self.layout.arrange(&items);
+    true
   }
 
   /// Ends every terminal in the row: a tab's panes, or the one loose terminal.
@@ -78,11 +129,23 @@ impl Workspace {
     cx.notify();
   }
 
-  pub(super) fn start_rename(&mut self, row: &str, window: &mut Window, cx: &mut Context<Self>) {
-    let Some(entry) = self.find_row(row) else {
+  /// Puts a field over a row's or a folder's name, starting from that name. The field keeps the
+  /// keyboard until the rename ends, through any `changed` in between.
+  pub(super) fn start_rename(
+    &mut self,
+    key: SidebarKey,
+    window: &mut Window,
+    cx: &mut Context<Self>,
+  ) {
+    let text = match &key {
+      SidebarKey::Row(row) => self
+        .find_row(row)
+        .map(|entry| entry_label(&self.layout, &self.terminals, &entry)),
+      SidebarKey::Folder(id) => self.layout.folder(*id).map(|folder| folder.name.clone()),
+    };
+    let Some(text) = text else {
       return;
     };
-    let text = entry_label(&self.layout, &self.terminals, &entry);
     // The sidebar's own font, not the terminal's.
     let family = window.text_style().font_family;
     let colors = Colors::active(cx);
@@ -100,7 +163,7 @@ impl Workspace {
       workspace.finish_rename(name, window, cx);
     });
     self.renaming = Some(Renaming {
-      row: row.to_string(),
+      key,
       field,
       _events: events,
     });
@@ -117,16 +180,31 @@ impl Workspace {
     let Some(renaming) = self.renaming.take() else {
       return;
     };
-    if let Some(name) = name
-      && let Some(entry) = self.find_row(&renaming.row)
-    {
-      self.layout.rename(&entry, &name);
+    if let Some(name) = name {
+      match renaming.key {
+        SidebarKey::Row(row) => {
+          if let Some(entry) = self.find_row(&row) {
+            self.layout.rename(&entry, &name);
+          }
+        }
+        SidebarKey::Folder(id) => self.layout.rename_folder(id, &name),
+      }
     }
     self.changed(window, cx);
   }
 
-  /// Draws the parts every sidebar line shares. Only a row has a menu, a close button and a name
-  /// to edit; a folder's line keeps the close button's room, so the dots line up.
+  /// Opens a sidebar menu at `position`, fading in.
+  fn open_menu(&mut self, position: Point<Pixels>, target: MenuTarget, cx: &mut Context<Self>) {
+    self.menu = Some(SidebarMenu {
+      position,
+      target,
+      shown: Tween::new(0.0, 1.0, Instant::now(), motion::duration()),
+    });
+    cx.notify();
+  }
+
+  /// Draws the parts every sidebar line shares, with its menu and its name to edit. Only a row
+  /// has a close button; a folder's line keeps its room, so the dots line up.
   fn sidebar_row(&self, content: SidebarRow, cx: &mut Context<Self>) -> AnyElement {
     let colors = Colors::active(cx);
     let SidebarRow {
@@ -139,15 +217,15 @@ impl Workspace {
       in_folder,
       on_open,
     } = content;
-    let (id, row) = match key {
-      SidebarKey::Row(row) => (format!("row-{row}"), Some(row)),
+    let (id, row) = match &key {
+      SidebarKey::Row(row) => (format!("row-{row}"), Some(row.clone())),
       SidebarKey::Folder(folder) => (format!("folder-{folder}"), None),
     };
     let dim = colors.text_muted;
     let renaming = self
       .renaming
       .as_ref()
-      .filter(|renaming| row.as_ref() == Some(&renaming.row));
+      .filter(|renaming| renaming.key == key);
     let label = match renaming {
       Some(renaming) => {
         let field = renaming.field.clone();
@@ -181,7 +259,7 @@ impl Workspace {
       .justify_center()
       .rounded_md()
       .text_color(dim);
-    let close = match row.clone() {
+    let close = match row {
       Some(closing) => close_slot
         .id(SharedString::from(format!("close-{closing}")))
         .hover(|button| button.bg(colors.surface_hover_strong))
@@ -209,19 +287,14 @@ impl Workspace {
       .when_some(on_open, |line, on_open| {
         line.on_click(cx.listener(move |workspace, _, window, cx| on_open(workspace, window, cx)))
       })
-      .when_some(row, |line, menu_row| {
-        line.on_mouse_down(
-          MouseButton::Right,
-          cx.listener(move |workspace, event: &MouseDownEvent, _, cx| {
-            workspace.menu = Some(RowMenu {
-              position: event.position,
-              row: menu_row.clone(),
-              shown: Tween::new(0.0, 1.0, Instant::now(), motion::duration()),
-            });
-            cx.notify();
-          }),
-        )
-      })
+      .on_mouse_down(
+        MouseButton::Right,
+        cx.listener(move |workspace, event: &MouseDownEvent, _, cx| {
+          // This line's menu only: the sidebar's own is for the space around the lines.
+          cx.stop_propagation();
+          workspace.open_menu(event.position, MenuTarget::Line(key.clone()), cx);
+        }),
+      )
       .when(in_folder, |line| line.child(indent()))
       .child(icon)
       .child(label)
@@ -355,27 +428,21 @@ impl Workspace {
     self.sidebar_row(content, cx)
   }
 
-  pub(super) fn render_menu(&self, menu: &RowMenu, cx: &mut Context<Self>) -> impl IntoElement {
-    let items = sidebar_items(&self.layout, &self.terminals);
-    let can_move_up = moved_row(&items, &menu.row, Direction::Up).is_some();
-    let can_move_down = moved_row(&items, &menu.row, Direction::Down).is_some();
-    let entry = find_row(&items, &menu.row);
-    let noun = match entry {
-      Some(Entry::Loose(_)) => "Terminal",
-      _ => "Tab",
-    };
-    // The shortcuts act on the active tab, so only that tab's row shows them.
-    let is_active_tab = matches!(
-      entry,
-      Some(Entry::Tab { index, .. }) if *index == self.layout.active_tab
-    );
-    let shortcut = |action| is_active_tab.then(|| self.shortcut(action)).flatten();
-    let rename_row = menu.row.clone();
-    let up_row = menu.row.clone();
-    let down_row = menu.row.clone();
-    let close_row = menu.row.clone();
+  pub(super) fn render_menu(&self, menu: &SidebarMenu, cx: &mut Context<Self>) -> impl IntoElement {
     let colors = Colors::active(cx);
     let menu_colors = menu_colors(colors);
+    let items = match &menu.target {
+      MenuTarget::Line(SidebarKey::Row(row)) => self.session_menu(row, menu_colors, cx),
+      MenuTarget::Line(SidebarKey::Folder(id)) => self.folder_menu(*id, menu_colors, cx),
+      MenuTarget::Sidebar => vec![
+        menu_item("new-folder", "New folder", None, true, menu_colors)
+          .on_click(menu_edit(
+            |workspace, window, cx| workspace.new_folder(window, cx),
+            cx,
+          ))
+          .into_any_element(),
+      ],
+    };
     div()
       .w(px(220.0))
       .py_1()
@@ -391,66 +458,181 @@ impl Workspace {
         workspace.menu = None;
         cx.notify();
       }))
-      .child(
-        menu_item(
-          "rename",
-          &format!("Rename {noun}…"),
-          None,
-          true,
-          menu_colors,
-        )
+      .children(items)
+  }
+
+  /// A session row's items: rename, move up and down, move into or out of folders, and close.
+  fn session_menu(&self, row: &str, colors: MenuColors, cx: &mut Context<Self>) -> Vec<AnyElement> {
+    let items = sidebar_items(&self.layout, &self.terminals);
+    let can_move_up = moved_row(&items, row, Direction::Up).is_some();
+    let can_move_down = moved_row(&items, row, Direction::Down).is_some();
+    let entry = find_row(&items, row);
+    let noun = match entry {
+      Some(Entry::Loose(_)) => "Terminal",
+      _ => "Tab",
+    };
+    // The shortcuts act on the active tab, so only that tab's row shows them.
+    let is_active_tab = matches!(
+      entry,
+      Some(Entry::Tab { index, .. }) if *index == self.layout.active_tab
+    );
+    let shortcut = |action| is_active_tab.then(|| self.shortcut(action)).flatten();
+    let current_folder = folder_of(&items, row);
+    let rename_row = row.to_string();
+    let up_row = row.to_string();
+    let down_row = row.to_string();
+    let new_folder_row = row.to_string();
+    let remove_row = row.to_string();
+    let close_row = row.to_string();
+    let mut menu = vec![
+      menu_item("rename", &format!("Rename {noun}…"), None, true, colors)
         .on_click(cx.listener(move |workspace, _, window, cx| {
           workspace.menu = None;
-          workspace.start_rename(&rename_row, window, cx);
-        })),
+          workspace.start_rename(SidebarKey::Row(rename_row.clone()), window, cx);
+        }))
+        .into_any_element(),
+      menu_separator(colors).into_any_element(),
+      menu_item(
+        "up",
+        &format!("Move {noun} Up"),
+        shortcut(Action::MoveTabUp),
+        can_move_up,
+        colors,
       )
-      .child(menu_separator(menu_colors))
-      .child(
-        menu_item(
-          "up",
-          &format!("Move {noun} Up"),
-          shortcut(Action::MoveTabUp),
-          can_move_up,
-          menu_colors,
-        )
-        .when(can_move_up, |item| {
-          item.on_click(cx.listener(move |workspace, _, window, cx| {
-            workspace.menu = None;
-            workspace.move_row(&up_row, Direction::Up);
-            workspace.changed(window, cx);
-          }))
-        }),
+      .when(can_move_up, |item| {
+        item.on_click(menu_edit(
+          move |workspace, _, _| workspace.move_row(&up_row, Direction::Up),
+          cx,
+        ))
+      })
+      .into_any_element(),
+      menu_item(
+        "down",
+        &format!("Move {noun} Down"),
+        shortcut(Action::MoveTabDown),
+        can_move_down,
+        colors,
       )
-      .child(
-        menu_item(
-          "down",
-          &format!("Move {noun} Down"),
-          shortcut(Action::MoveTabDown),
-          can_move_down,
-          menu_colors,
-        )
-        .when(can_move_down, |item| {
-          item.on_click(cx.listener(move |workspace, _, window, cx| {
-            workspace.menu = None;
-            workspace.move_row(&down_row, Direction::Down);
-            workspace.changed(window, cx);
-          }))
-        }),
+      .when(can_move_down, |item| {
+        item.on_click(menu_edit(
+          move |workspace, _, _| workspace.move_row(&down_row, Direction::Down),
+          cx,
+        ))
+      })
+      .into_any_element(),
+      menu_separator(colors).into_any_element(),
+      menu_item(
+        "move-to-new-folder",
+        "Move to new folder…",
+        shortcut(Action::MoveToNewFolder),
+        true,
+        colors,
       )
-      .child(menu_separator(menu_colors))
-      .child(
+      .on_click(menu_edit(
+        move |workspace, window, cx| workspace.move_to_new_folder(&new_folder_row, window, cx),
+        cx,
+      ))
+      .into_any_element(),
+    ];
+    let other_folders = items.iter().filter_map(|item| match item {
+      SidebarItem::Folder(folder) if Some(folder.id) != current_folder => Some(folder),
+      _ => None,
+    });
+    for folder in other_folders {
+      let id = folder.id;
+      let moved = row.to_string();
+      menu.push(
         menu_item(
-          "close",
-          &format!("Close {noun}"),
-          shortcut(Action::CloseTab),
+          &format!("move-to-{id}"),
+          &format!("Move to {}", folder.name),
+          None,
           true,
-          menu_colors,
+          colors,
         )
-        .on_click(cx.listener(move |workspace, _, _, cx| {
-          workspace.menu = None;
-          workspace.close_row(&close_row, cx);
-        })),
+        .on_click(menu_edit(
+          move |workspace, _, _| workspace.move_to_folder(&moved, id),
+          cx,
+        ))
+        .into_any_element(),
+      );
+    }
+    if current_folder.is_some() {
+      menu.push(
+        menu_item(
+          "remove-from-folder",
+          "Remove from folder",
+          None,
+          true,
+          colors,
+        )
+        .on_click(menu_edit(
+          move |workspace, _, _| workspace.remove_from_folder(&remove_row),
+          cx,
+        ))
+        .into_any_element(),
+      );
+    }
+    menu.push(menu_separator(colors).into_any_element());
+    menu.push(
+      menu_item(
+        "close",
+        &format!("Close {noun}"),
+        shortcut(Action::CloseTab),
+        true,
+        colors,
       )
+      .on_click(cx.listener(move |workspace, _, _, cx| {
+        workspace.menu = None;
+        workspace.close_row(&close_row, cx);
+      }))
+      .into_any_element(),
+    );
+    menu
+  }
+
+  /// A folder's items: rename, move up and down, and delete, which leaves its sessions where it
+  /// was.
+  fn folder_menu(
+    &self,
+    id: FolderId,
+    colors: MenuColors,
+    cx: &mut Context<Self>,
+  ) -> Vec<AnyElement> {
+    let items = sidebar_items(&self.layout, &self.terminals);
+    let can_move_up = moved_folder(&items, id, Direction::Up).is_some();
+    let can_move_down = moved_folder(&items, id, Direction::Down).is_some();
+    vec![
+      menu_item("rename", "Rename folder…", None, true, colors)
+        .on_click(cx.listener(move |workspace, _, window, cx| {
+          workspace.menu = None;
+          workspace.start_rename(SidebarKey::Folder(id), window, cx);
+        }))
+        .into_any_element(),
+      menu_separator(colors).into_any_element(),
+      menu_item("up", "Move folder up", None, can_move_up, colors)
+        .when(can_move_up, |item| {
+          item.on_click(menu_edit(
+            move |workspace, _, _| workspace.move_folder(id, Direction::Up),
+            cx,
+          ))
+        })
+        .into_any_element(),
+      menu_item("down", "Move folder down", None, can_move_down, colors)
+        .when(can_move_down, |item| {
+          item.on_click(menu_edit(
+            move |workspace, _, _| workspace.move_folder(id, Direction::Down),
+            cx,
+          ))
+        })
+        .into_any_element(),
+      menu_separator(colors).into_any_element(),
+      menu_item("delete", "Delete folder", None, true, colors)
+        .on_click(menu_edit(
+          move |workspace, _, _| workspace.layout.delete_folder(id),
+          cx,
+        ))
+        .into_any_element(),
+    ]
   }
 
   pub(super) fn sidebar_toggle(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -525,13 +707,15 @@ impl Workspace {
       match item {
         SidebarItem::Row(entry) => lines.extend(self.render_entry(entry, false, now, cx)),
         SidebarItem::Folder(folder) => {
+          let key = SidebarKey::Folder(folder.id);
           let line = self.render_folder_row(folder, cx);
-          lines.push(self.grow_in(&SidebarKey::Folder(folder.id), line, now));
+          lines.push(self.grow_in(&key, line, now));
           if folder.collapsed {
             continue;
           }
+          // Grows in with its folder, so a folder just made comes in as one.
           if folder.rows.is_empty() {
-            lines.push(no_sessions(colors));
+            lines.push(self.grow_in(&key, no_sessions(colors), now));
           }
           for entry in &folder.rows {
             lines.extend(self.render_entry(entry, true, now, cx));
@@ -557,6 +741,13 @@ impl Workspace {
           .flex_col()
           .gap_0p5()
           .overflow_y_scroll()
+          // The heading and the space around the lines; a line opens its own menu instead.
+          .on_mouse_down(
+            MouseButton::Right,
+            cx.listener(|workspace, event: &MouseDownEvent, _, cx| {
+              workspace.open_menu(event.position, MenuTarget::Sidebar, cx);
+            }),
+          )
           .child(label)
           .children(lines)
           .children(templates),
@@ -596,6 +787,19 @@ impl Workspace {
       .child(line)
       .into_any_element()
   }
+}
+
+/// A menu item's click: closes the menu, makes the edit, then runs `changed`, which saves the
+/// layout and, while a rename the edit started is on, leaves the keyboard with its field.
+fn menu_edit(
+  edit: impl Fn(&mut Workspace, &mut Window, &mut Context<Workspace>) + 'static,
+  cx: &Context<Workspace>,
+) -> impl Fn(&ClickEvent, &mut Window, &mut App) + 'static {
+  cx.listener(move |workspace, _: &ClickEvent, window, cx| {
+    workspace.menu = None;
+    edit(workspace, window, cx);
+    workspace.changed(window, cx);
+  })
 }
 
 /// A sidebar row is known by its first terminal.
