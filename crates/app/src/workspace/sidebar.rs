@@ -309,23 +309,9 @@ impl Workspace {
       .into_any_element()
   }
 
-  /// The dot a row shows: a loose terminal's own, or the most urgent of a tab's panes. A tab's
-  /// finished panes don't count: they fold away and close right after, so their color would
-  /// only flash on the tab.
+  /// The dot a row shows; see `row_indicator`.
   fn row_dot(&self, entry: &Entry) -> Indicator {
-    match entry {
-      Entry::Tab { terminals, .. } => most_urgent(
-        terminals
-          .iter()
-          .filter_map(|address| self.terminals.get(address))
-          .map(indicator)
-          .filter(|dot| *dot != Indicator::Finished),
-      ),
-      Entry::Loose(address) => self
-        .terminals
-        .get(address)
-        .map_or(Indicator::Quiet, indicator),
-    }
+    row_indicator(entry, &self.terminals)
   }
 
   pub(super) fn render_tab_row(

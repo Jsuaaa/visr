@@ -14,8 +14,8 @@ use app_state::sidebar::{
   moved_to_folder, moved_to_new_folder, removed_from_folder, sidebar_items, with_new_folder,
 };
 use app_state::{
-  Entry, Indicator, Terminals, clean_exits, display_name, entry_label, indicator, most_urgent,
-  panes_to_close,
+  Entry, Indicator, Terminals, clean_exits, display_name, entry_label, most_urgent, panes_to_close,
+  row_indicator,
 };
 use config::{Action, Config, KeyPress, LoadedTheme, ThemeChoice};
 use gpui::{

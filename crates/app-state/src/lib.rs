@@ -207,6 +207,24 @@ pub fn most_urgent(indicators: impl IntoIterator<Item = Indicator>) -> Indicator
     .unwrap_or(Indicator::Quiet)
 }
 
+/// The dot a sidebar row shows: a loose terminal's own, or the most urgent of a tab's panes.
+/// A tab's finished panes don't count: they fold away and close right after, so their color
+/// would only flash on the tab.
+pub fn row_indicator(entry: &Entry, terminals: &Terminals) -> Indicator {
+  match entry {
+    Entry::Tab {
+      terminals: panes, ..
+    } => most_urgent(
+      panes
+        .iter()
+        .filter_map(|address| terminals.get(address))
+        .map(indicator)
+        .filter(|dot| *dot != Indicator::Finished),
+    ),
+    Entry::Loose(address) => terminals.get(address).map_or(Indicator::Quiet, indicator),
+  }
+}
+
 /// What to call a terminal in a list: its name, the title its program set, or what runs in it.
 pub fn display_name(terminal: &Terminal) -> String {
   if let Some(name) = &terminal.name {
@@ -249,5 +267,35 @@ mod tests {
       Indicator::Finished
     );
     assert_eq!(urgent(&[]), Indicator::Quiet);
+  }
+
+  #[test]
+  fn a_tab_dot_skips_finished_panes_and_a_loose_one_shows_its_own() {
+    use hc_proto::types::{Status, StatusState, TerminalState};
+    let mut terminals = crate::layout::testing::core(&["t1", "t2", "t3"]);
+    terminals.terminals[1].state = TerminalState::Finished;
+    terminals.terminals[2].state = TerminalState::Finished;
+    let tab = |panes: &[&str]| Entry::Tab {
+      index: 0,
+      terminals: panes.iter().map(|pane| pane.to_string()).collect(),
+    };
+    assert_eq!(
+      row_indicator(&tab(&["t1", "t2"]), &terminals),
+      Indicator::Quiet
+    );
+    terminals.terminals[0].status = Some(Status {
+      state: StatusState::Working,
+      title: String::new(),
+      msg: String::new(),
+      progress: None,
+    });
+    assert_eq!(
+      row_indicator(&tab(&["t1", "t2"]), &terminals),
+      Indicator::Working
+    );
+    assert_eq!(
+      row_indicator(&Entry::Loose("t3".into()), &terminals),
+      Indicator::Finished
+    );
   }
 }
