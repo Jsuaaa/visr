@@ -232,6 +232,42 @@ impl Tab {
   }
 }
 
+/// Names a folder in the layout.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct FolderId(u32);
+
+/// A named group of sidebar rows, kept in Visr's layout only.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Folder {
+  pub id: FolderId,
+  pub name: String,
+  #[serde(default)]
+  pub collapsed: bool,
+  /// The terminals of its rows, in the order shown.
+  #[serde(default)]
+  pub terminals: Vec<String>,
+}
+
+/// One place in the sidebar's arranged order.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Slot {
+  /// A terminal outside any folder; layouts saved before folders hold only these.
+  Terminal(String),
+  Folder(Folder),
+}
+
+/// One line `order` lists, as `Layout::places` reads it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Place<'a> {
+  Folder(&'a Folder),
+  Terminal {
+    address: &'a str,
+    folder: Option<FolderId>,
+  },
+}
+
 /// The tabs, which one is active, and the user's ordering and names for sidebar rows.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct Layout {
@@ -239,7 +275,7 @@ pub struct Layout {
   pub active_tab: usize,
   /// The sidebar's order as the user arranged it; terminals missing from it go last.
   #[serde(default)]
-  pub order: Vec<String>,
+  pub order: Vec<Slot>,
   /// The user's names for terminals shown in no tab, by address.
   #[serde(default)]
   pub names: BTreeMap<String, String>,
@@ -340,6 +376,37 @@ impl Layout {
     }
   }
 
+  /// Every place `order` lists, depth first: a folder, then its terminals. A terminal listed
+  /// again later keeps its first place.
+  pub(crate) fn places(&self) -> Vec<Place<'_>> {
+    let mut places = Vec::new();
+    for slot in &self.order {
+      match slot {
+        Slot::Terminal(address) => places.push(Place::Terminal {
+          address,
+          folder: None,
+        }),
+        Slot::Folder(folder) => {
+          places.push(Place::Folder(folder));
+          places.extend(folder.terminals.iter().map(|address| Place::Terminal {
+            address,
+            folder: Some(folder.id),
+          }));
+        }
+      }
+    }
+    let mut seen: Vec<&str> = Vec::new();
+    places.retain(|place| match place {
+      Place::Terminal { address, .. } => {
+        let first = !seen.contains(address);
+        seen.push(address);
+        first
+      }
+      Place::Folder(_) => true,
+    });
+    places
+  }
+
   /// Moves the sidebar row at `from` to `to`, given the rows as shown.
   pub fn move_entry(&mut self, entries: &[crate::Entry], from: usize, to: usize) {
     let mut entries = entries.to_vec();
@@ -351,7 +418,7 @@ impl Layout {
     self.order = entries
       .iter()
       .flat_map(|entry| entry.terminals())
-      .map(str::to_string)
+      .map(|address| Slot::Terminal(address.to_string()))
       .collect();
   }
 
@@ -375,7 +442,14 @@ impl Layout {
 
   /// The terminal is gone from the core: drop its panes everywhere.
   pub fn forget(&mut self, terminal: &str) {
-    self.order.retain(|known| known != terminal);
+    self
+      .order
+      .retain(|slot| !matches!(slot, Slot::Terminal(known) if known == terminal));
+    for slot in &mut self.order {
+      if let Slot::Folder(folder) = slot {
+        folder.terminals.retain(|known| known != terminal);
+      }
+    }
     self.names.remove(terminal);
     self.tabs.retain_mut(|tab| tab.forget(terminal));
     self.active_tab = self.active_tab.min(self.tabs.len().saturating_sub(1));
@@ -418,5 +492,115 @@ impl Layout {
     {
       *current = ratio.clamp(MIN_RATIO, MAX_RATIO);
     }
+  }
+}
+
+/// Builders the tests of this crate share.
+#[cfg(test)]
+pub(crate) mod testing {
+  use super::*;
+
+  pub(crate) fn id(number: u32) -> FolderId {
+    FolderId(number)
+  }
+
+  pub(crate) fn top(address: &str) -> Slot {
+    Slot::Terminal(address.into())
+  }
+
+  /// A folder named `f{number}`.
+  pub(crate) fn folder(number: u32, collapsed: bool, terminals: &[&str]) -> Slot {
+    Slot::Folder(Folder {
+      id: id(number),
+      name: format!("f{number}"),
+      collapsed,
+      terminals: terminals
+        .iter()
+        .map(|address| address.to_string())
+        .collect(),
+    })
+  }
+
+  /// One single-pane tab per address, so the last one is active.
+  pub(crate) fn layout_with(tabs: &[&str], order: Vec<Slot>) -> Layout {
+    let mut layout = Layout::default();
+    for address in tabs {
+      layout.new_tab(address);
+    }
+    layout.order = order;
+    layout
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::testing::{folder, id, layout_with, top};
+  use super::*;
+
+  #[test]
+  fn reads_a_layout_saved_before_folders() {
+    let json = r#"{"tabs":[{"root":{"leaf":{"terminal":"t1"}},"focused":"t1"}],
+    "active_tab":0,"order":["t1","t2"],"names":{"t2":"logs"}}"#;
+    let layout: Layout = serde_json::from_str(json).expect("a 0.1.1 layout reads");
+    assert_eq!(layout.order, vec![top("t1"), top("t2")]);
+    assert_eq!(layout.shown(), vec!["t1"]);
+    assert_eq!(layout.names.get("t2").map(String::as_str), Some("logs"));
+  }
+
+  #[test]
+  fn folders_are_saved_in_this_shape_and_read_back() {
+    let layout = layout_with(&[], vec![top("t1"), folder(1, true, &["t2"])]);
+    let saved = serde_json::to_value(&layout).expect("a layout serializes");
+    assert_eq!(
+      saved["order"],
+      serde_json::json!(["t1", {"id": 1, "name": "f1", "collapsed": true, "terminals": ["t2"]}])
+    );
+    let read: Layout = serde_json::from_value(saved).expect("it reads back");
+    assert_eq!(read, layout);
+  }
+
+  #[test]
+  fn a_folder_without_its_optional_fields_reads() {
+    let json = r#"{"tabs":[],"active_tab":0,"order":[{"id":2,"name":"api"}]}"#;
+    let layout: Layout = serde_json::from_str(json).expect("a short folder reads");
+    let api = Folder {
+      id: id(2),
+      name: "api".into(),
+      collapsed: false,
+      terminals: Vec::new(),
+    };
+    assert_eq!(layout.order, vec![Slot::Folder(api)]);
+  }
+
+  #[test]
+  fn places_read_depth_first_and_skip_a_terminal_listed_again() {
+    let layout = layout_with(
+      &[],
+      vec![top("t1"), folder(1, false, &["t2", "t1"]), top("t3")],
+    );
+    let listed = Folder {
+      id: id(1),
+      name: "f1".into(),
+      collapsed: false,
+      terminals: vec!["t2".into(), "t1".into()],
+    };
+    assert_eq!(
+      layout.places(),
+      vec![
+        Place::Terminal {
+          address: "t1",
+          folder: None
+        },
+        Place::Folder(&listed),
+        Place::Terminal {
+          address: "t2",
+          folder: Some(id(1))
+        },
+        Place::Terminal {
+          address: "t3",
+          folder: None
+        },
+      ]
+    );
   }
 }

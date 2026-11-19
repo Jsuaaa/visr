@@ -170,15 +170,21 @@ pub fn sidebar_entries(layout: &layout::Layout, terminals: &Terminals) -> Vec<En
       !shown.contains(&terminal.address.as_str()) && !terminals.is_leaving(terminal)
     })
     .map(|terminal| Entry::Loose(terminal.address.clone()));
-  let arranged = layout.order.len();
-  let rank = |address: &str| match layout.order.iter().position(|known| known == address) {
-    Some(index) => index,
-    None => {
-      let core = terminals
-        .list()
-        .iter()
-        .position(|terminal| terminal.address == address);
-      arranged + core.unwrap_or(usize::MAX - arranged)
+  let places = layout.places();
+  let arranged = places.len();
+  let rank = |address: &str| {
+    let listed = places.iter().position(
+      |place| matches!(place, layout::Place::Terminal { address: known, .. } if *known == address),
+    );
+    match listed {
+      Some(index) => index,
+      None => {
+        let core = terminals
+          .list()
+          .iter()
+          .position(|terminal| terminal.address == address);
+        arranged + core.unwrap_or(usize::MAX - arranged)
+      }
     }
   };
   let mut entries: Vec<Entry> = tabs.chain(loose).collect();
