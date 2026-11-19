@@ -26,7 +26,7 @@ use hc_proto::types::{
 };
 use ui::colors::Colors;
 use ui::icons::{
-  ICON_CODE, ICON_ELLIPSIS, ICON_EXPAND, ICON_FILES, ICON_FOLDER_OPENED, ICON_FONT, ICON_RESTORE,
+  ICON_CODE, ICON_ELLIPSIS, ICON_EXPAND, ICON_FOLDER, ICON_FOLDER_OPENED, ICON_FONT, ICON_RESTORE,
   ICON_SOURCE_CONTROL, ICON_TERMINAL, ShellColors, StackColors, close_icon, glyph_icon, plus_icon,
   shell_icon, sidebar_icon, split_icon, stack_icon, titlebar_button,
 };

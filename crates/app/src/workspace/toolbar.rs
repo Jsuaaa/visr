@@ -119,7 +119,7 @@ impl Workspace {
           workspace.toggle_panel(panel, cx);
         }))
     };
-    let files = panel_button("toolbar-files", Panel::Files, ICON_FILES, "Files", cx);
+    let files = panel_button("toolbar-files", Panel::Files, ICON_FOLDER, "Files", cx);
     let git = panel_button(
       "toolbar-changes",
       Panel::Changes,
