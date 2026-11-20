@@ -786,6 +786,12 @@ impl Workspace {
           .gap_0p5()
           .overflow_y_scroll()
           .track_scroll(&self.sidebar_scroll)
+          // Every drag starts with a press here: no spot a drag let go elsewhere left behind can
+          // carry over to the next one.
+          .on_mouse_down(
+            MouseButton::Left,
+            cx.listener(|workspace, _: &MouseDownEvent, _, _| workspace.drop_spot = None),
+          )
           // The heading and the space around the lines; a line opens its own menu instead.
           .on_mouse_down(
             MouseButton::Right,
