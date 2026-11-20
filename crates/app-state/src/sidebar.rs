@@ -3,6 +3,10 @@
 use crate::layout::{FolderId, Layout, Place};
 use crate::{Entry, Terminals};
 
+mod drag;
+
+pub use drag::{DropSpot, Hover, drop_spot, dropped};
+
 /// A folder as the sidebar shows it, with its rows in order.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SidebarFolder {
@@ -316,11 +320,11 @@ mod tests {
     Entry::Loose(address.into())
   }
 
-  fn row(address: &str) -> SidebarItem {
+  pub(super) fn row(address: &str) -> SidebarItem {
     SidebarItem::Row(loose(address))
   }
 
-  fn in_folder(number: u32, collapsed: bool, rows: &[&str]) -> SidebarItem {
+  pub(super) fn in_folder(number: u32, collapsed: bool, rows: &[&str]) -> SidebarItem {
     SidebarItem::Folder(SidebarFolder {
       id: id(number),
       name: format!("f{number}"),
