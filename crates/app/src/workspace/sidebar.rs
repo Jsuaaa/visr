@@ -749,10 +749,13 @@ impl Workspace {
         .child(drop_marker(DropEdge::Top, false, colors))
     });
     // Below the lines: the templates, then the rest of the sidebar's height. A session dropped
-    // here goes to the end of the top level, outside every folder.
+    // here goes to the end of the top level, outside every folder. It grows into free space but
+    // never shrinks below its templates: the scroll area measures only its own children, so a
+    // template squeezed out of the tail could not be scrolled to.
     let tail = div()
       .relative()
-      .flex_1()
+      .flex_grow()
+      .flex_shrink_0()
       .min_h(px(ROW_HEIGHT))
       .flex()
       .flex_col()
