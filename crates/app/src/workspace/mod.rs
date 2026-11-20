@@ -21,9 +21,9 @@ use app_state::{
 use config::{Action, Config, KeyPress, LoadedTheme, ThemeChoice};
 use gpui::{
   AnyElement, App, Bounds, Context, DragMoveEvent, Entity, FocusHandle, Hsla, KeyDownEvent,
-  MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point, SharedString,
-  Subscription, Task, Window, anchored, canvas, deferred, div, point, prelude::*, px, relative,
-  rgb,
+  MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point, ScrollHandle,
+  SharedString, Subscription, Task, Window, anchored, canvas, deferred, div, point, prelude::*, px,
+  relative, rgb,
 };
 use hc_client::{Client, Notice};
 use hc_proto::types::{
@@ -197,6 +197,8 @@ pub(crate) struct Workspace {
   renaming: Option<Renaming>,
   /// Where the line being dragged in the sidebar would land; shown only while a drag is on.
   drop_spot: Option<DropSpot>,
+  /// The sidebar's scroll area, for where it shows on screen: a drag aims only at lines in sight.
+  sidebar_scroll: ScrollHandle,
   sidebar_open: bool,
   /// How open the sidebar is drawn, 0 to 1, easing toward `sidebar_open`.
   sidebar: Tween,
@@ -375,6 +377,7 @@ impl Workspace {
       editors: editors::installed(),
       renaming: None,
       drop_spot: None,
+      sidebar_scroll: ScrollHandle::new(),
       sidebar_open: true,
       sidebar: Tween::settled(1.0),
       split_motion: None,

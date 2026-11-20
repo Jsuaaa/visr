@@ -785,6 +785,7 @@ impl Workspace {
           .flex_col()
           .gap_0p5()
           .overflow_y_scroll()
+          .track_scroll(&self.sidebar_scroll)
           // The heading and the space around the lines; a line opens its own menu instead.
           .on_mouse_down(
             MouseButton::Right,

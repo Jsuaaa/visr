@@ -48,10 +48,10 @@ impl Workspace {
     event: &DragMoveEvent<DraggedLine>,
     cx: &mut Context<Self>,
   ) {
-    let (bounds, pointer) = (event.bounds, event.event.position);
-    if !bounds.contains(&pointer) {
+    if !self.points_at(event) {
       return;
     }
+    let (bounds, pointer) = (event.bounds, event.event.position);
     let y = (pointer.y - bounds.top()) / bounds.size.height;
     let dragged = event.drag(cx).key.clone();
     let items = sidebar_items(&self.layout, &self.terminals);
@@ -67,13 +67,21 @@ impl Workspace {
     event: &DragMoveEvent<DraggedLine>,
     cx: &mut Context<Self>,
   ) {
-    if !event.bounds.contains(&event.event.position) {
+    if !self.points_at(event) {
       return;
     }
     let dragged = event.drag(cx).key.clone();
     let items = sidebar_items(&self.layout, &self.terminals);
     let spot = dropped(&items, &dragged, &spot).map(|_| spot);
     self.aim(spot, cx);
+  }
+
+  /// Whether the pointer is on the element `event` is for, where it can be seen. A line scrolled
+  /// out of view keeps its bounds under the title strip or past the window's edge, and must not
+  /// take the aim there.
+  fn points_at(&self, event: &DragMoveEvent<DraggedLine>) -> bool {
+    let pointer = event.event.position;
+    event.bounds.contains(&pointer) && self.sidebar_scroll.bounds().contains(&pointer)
   }
 
   /// Sets where the drag would land. It redraws only when that changed, since the pointer moves
