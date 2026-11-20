@@ -307,9 +307,7 @@ impl Workspace {
       .when_some(on_open, |line, on_open| {
         line.on_click(cx.listener(move |workspace, _, window, cx| on_open(workspace, window, cx)))
       })
-      .when_some(dragged, |line, dragged| {
-        line.on_drag(dragged, |dragged, _, _, cx| cx.new(|_| dragged.clone()))
-      })
+      .when_some(dragged, |line, dragged| line.on_drag(dragged, drag_preview))
       .on_drag_move(cx.listener(
         move |workspace, event: &DragMoveEvent<DraggedLine>, _, cx| {
           workspace.aim_over(&over, event, cx);

@@ -4,12 +4,22 @@
 
 use super::*;
 
-/// A sidebar line on its way to a new place: what the drag carries, and the faded copy of the
-/// line that follows the pointer.
+/// How far left of the pointer the dragged copy starts, so the pointer sits on it.
+const GRAB_LEAD: f32 = 12.0;
+
+/// A sidebar line on its way to a new place: what the drag carries.
 #[derive(Clone)]
 pub(super) struct DraggedLine {
   pub(super) key: SidebarKey,
   pub(super) name: SharedString,
+}
+
+/// The faded copy of a dragged line that follows the pointer. GPUI draws it from where the line's
+/// left edge was, so it keeps how far right of that edge the line was grabbed, to start under the
+/// pointer instead.
+pub(super) struct DragPreview {
+  name: SharedString,
+  grab: Pixels,
 }
 
 /// Which edge of a line a drop marker runs along.
@@ -19,23 +29,31 @@ pub(super) enum DropEdge {
   Bottom,
 }
 
-impl Render for DraggedLine {
+impl Render for DragPreview {
   fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
     let colors = Colors::active(cx);
-    div()
-      .h(px(ROW_HEIGHT))
-      .max_w(px(SIDEBAR_WIDTH))
-      .px_2()
-      .flex()
-      .items_center()
-      .rounded_lg()
-      .bg(colors.surface_raised)
-      .border_1()
-      .border_color(colors.surface_hover_strong)
-      .opacity(0.85)
-      .text_size(px(13.0))
-      .text_color(colors.text)
-      .child(div().min_w_0().truncate().child(self.name.clone()))
+    let lead = px(GRAB_LEAD);
+    let left = if self.grab > lead {
+      self.grab - lead
+    } else {
+      px(0.0)
+    };
+    div().pl(left).child(
+      div()
+        .h(px(ROW_HEIGHT))
+        .max_w(px(SIDEBAR_WIDTH))
+        .px_2()
+        .flex()
+        .items_center()
+        .rounded_lg()
+        .bg(colors.surface_raised)
+        .border_1()
+        .border_color(colors.surface_hover_strong)
+        .opacity(0.85)
+        .text_size(px(13.0))
+        .text_color(colors.text)
+        .child(div().min_w_0().truncate().child(self.name.clone())),
+    )
   }
 }
 
@@ -115,6 +133,20 @@ impl Workspace {
   pub(super) fn shown_drop_spot(&self, cx: &App) -> Option<&DropSpot> {
     self.drop_spot.as_ref().filter(|_| cx.has_active_drag())
   }
+}
+
+/// The copy that follows the pointer while `line` is dragged, grabbed at `grab` from the line's
+/// top-left corner.
+pub(super) fn drag_preview(
+  line: &DraggedLine,
+  grab: Point<Pixels>,
+  _: &mut Window,
+  cx: &mut App,
+) -> Entity<DragPreview> {
+  cx.new(|_| DragPreview {
+    name: line.name.clone(),
+    grab: grab.x,
+  })
 }
 
 /// The 2 px line that shows where a drop lands, along one edge of the line it is aimed against.

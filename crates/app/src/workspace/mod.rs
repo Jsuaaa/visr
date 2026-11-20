@@ -62,7 +62,7 @@ mod toolbar;
 
 use changes::GitView;
 use config_watch::ConfigWatch;
-use drag::{DraggedLine, DropEdge, drop_marker, drop_outline};
+use drag::{DraggedLine, DropEdge, drag_preview, drop_marker, drop_outline};
 use panel::{OutputLook, PANEL_WIDTH, Panel, PanelSwitch, TreeState};
 use resize::{Edge, EdgeDrag};
 use sidebar::visible_keys;
