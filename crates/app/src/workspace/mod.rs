@@ -10,7 +10,7 @@ use std::time::{Duration, Instant, SystemTime};
 
 use app_state::layout::{Axis, Branch, FolderId, Layout, Node, split_size};
 use app_state::sidebar::{
-  Direction, SidebarFolder, SidebarItem, find_row, folder_of, moved_folder, moved_row,
+  Direction, SidebarFolder, SidebarItem, SidebarKey, find_row, folder_of, moved_folder, moved_row,
   moved_to_folder, moved_to_new_folder, removed_from_folder, sidebar_items, with_new_folder,
 };
 use app_state::{
@@ -83,14 +83,6 @@ enum ConfigSeen {
   Missing,
   /// Last modified at this time.
   At(SystemTime),
-}
-
-/// A line of the sidebar: a row, known by its first terminal, or a folder, by its id. Rows
-/// move and tabs renumber, so neither is known by its place.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-enum SidebarKey {
-  Row(String),
-  Folder(FolderId),
 }
 
 /// What a sidebar menu was opened on.

@@ -19,6 +19,14 @@ pub enum SidebarItem {
   Folder(SidebarFolder),
 }
 
+/// A line of the sidebar: a row, known by its first terminal, or a folder, by its id. Rows
+/// move and tabs renumber, so neither is known by its place.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum SidebarKey {
+  Row(String),
+  Folder(FolderId),
+}
+
 /// The sidebar as shown: every tab, then every loose terminal that isn't leaving, each placed by
 /// its best ranked terminal in `layout.order`. Terminals the order doesn't list go last, in the
 /// core's order, at the top level.
