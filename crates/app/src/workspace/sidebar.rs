@@ -108,7 +108,7 @@ impl Workspace {
 
   /// Lays out the sidebar as `edit` rearranges it; says whether the edit could happen. The
   /// caller runs `changed`, which saves it.
-  fn edit_sidebar(
+  pub(super) fn edit_sidebar(
     &mut self,
     edit: impl FnOnce(&[SidebarItem]) -> Option<Vec<SidebarItem>>,
   ) -> bool {
@@ -227,6 +227,24 @@ impl Workspace {
       .renaming
       .as_ref()
       .filter(|renaming| renaming.key == key);
+    // The line being renamed stays put, so the mouse can select text in its field.
+    let dragged = renaming.is_none().then(|| DraggedLine {
+      key: key.clone(),
+      name: name.clone().into(),
+    });
+    let marker = match self.shown_drop_spot(cx) {
+      Some(DropSpot::Before(line)) if *line == key => {
+        Some(drop_marker(DropEdge::Top, in_folder, colors))
+      }
+      Some(DropSpot::After(line)) if *line == key => {
+        Some(drop_marker(DropEdge::Bottom, in_folder, colors))
+      }
+      Some(DropSpot::Into(folder)) if key == SidebarKey::Folder(*folder) => {
+        Some(drop_outline(colors))
+      }
+      _ => None,
+    };
+    let over = key.clone();
     let label = match renaming {
       Some(renaming) => {
         let field = renaming.field.clone();
@@ -281,6 +299,7 @@ impl Workspace {
     };
     sidebar_line()
       .id(SharedString::from(id))
+      .relative()
       .group("row")
       .rounded_lg()
       .when(is_active, |line| line.bg(colors.surface_active))
@@ -288,6 +307,14 @@ impl Workspace {
       .when_some(on_open, |line, on_open| {
         line.on_click(cx.listener(move |workspace, _, window, cx| on_open(workspace, window, cx)))
       })
+      .when_some(dragged, |line, dragged| {
+        line.on_drag(dragged, |dragged, _, _, cx| cx.new(|_| dragged.clone()))
+      })
+      .on_drag_move(cx.listener(
+        move |workspace, event: &DragMoveEvent<DraggedLine>, _, cx| {
+          workspace.aim_over(&over, event, cx);
+        },
+      ))
       .on_mouse_down(
         MouseButton::Right,
         cx.listener(move |workspace, event: &MouseDownEvent, _, cx| {
@@ -307,6 +334,7 @@ impl Workspace {
           .when_some(dot, |slot, dot| slot.bg(indicator_color(dot, colors))),
       )
       .child(close)
+      .children(marker)
       .into_any_element()
   }
 
@@ -702,7 +730,7 @@ impl Workspace {
           }
           // Grows in with its folder, so a folder just made comes in as one.
           if folder.rows.is_empty() {
-            lines.push(self.grow_in(&key, no_sessions(colors), now));
+            lines.push(self.grow_in(&key, self.no_sessions(folder.id, cx), now));
           }
           for entry in &folder.rows {
             lines.extend(self.render_entry(entry, true, now, cx));
@@ -710,6 +738,32 @@ impl Workspace {
         }
       }
     }
+    let end_marker = matches!(self.shown_drop_spot(cx), Some(DropSpot::End)).then(|| {
+      // Inset like a line, so this marker lines up with a top-level line's.
+      div()
+        .absolute()
+        .top_0()
+        .left_0()
+        .right_0()
+        .mx_2()
+        .child(drop_marker(DropEdge::Top, false, colors))
+    });
+    // Below the lines: the templates, then the rest of the sidebar's height. A session dropped
+    // here goes to the end of the top level, outside every folder.
+    let tail = div()
+      .relative()
+      .flex_1()
+      .min_h(px(ROW_HEIGHT))
+      .flex()
+      .flex_col()
+      .gap_0p5()
+      .on_drag_move(
+        cx.listener(|workspace, event: &DragMoveEvent<DraggedLine>, _, cx| {
+          workspace.aim_at(DropSpot::End, event, cx);
+        }),
+      )
+      .children(templates)
+      .children(end_marker);
     div()
       .w(px(self.sidebar_drawn))
       .h_full()
@@ -735,9 +789,20 @@ impl Workspace {
               workspace.open_menu(event.position, MenuTarget::Sidebar, cx);
             }),
           )
+          // Outside the sidebar a drag aims nowhere, so letting go there moves nothing.
+          .on_drag_move(
+            cx.listener(|workspace, event: &DragMoveEvent<DraggedLine>, _, cx| {
+              if !event.bounds.contains(&event.event.position) {
+                workspace.aim(None, cx);
+              }
+            }),
+          )
+          .on_drop(cx.listener(|workspace, line: &DraggedLine, window, cx| {
+            workspace.drop_line(&line.key, window, cx);
+          }))
           .child(label)
           .children(lines)
-          .children(templates),
+          .child(tail),
       )
   }
 
@@ -774,6 +839,23 @@ impl Workspace {
       .child(line)
       .into_any_element()
   }
+
+  /// What an open folder with no rows shows under its name. It isn't a row, so it has no hover
+  /// and no click, but a session dropped on it goes into the folder.
+  fn no_sessions(&self, id: FolderId, cx: &mut Context<Self>) -> AnyElement {
+    let colors = Colors::active(cx);
+    sidebar_line()
+      .flex_none()
+      .text_color(colors.text_muted)
+      .on_drag_move(cx.listener(
+        move |workspace, event: &DragMoveEvent<DraggedLine>, _, cx| {
+          workspace.aim_at(DropSpot::Into(id), event, cx);
+        },
+      ))
+      .child(indent())
+      .child("No sessions")
+      .into_any_element()
+  }
 }
 
 /// A menu item's click: closes the menu, makes the edit, then runs `changed`, which saves the
@@ -808,19 +890,8 @@ fn sidebar_line() -> gpui::Div {
 
 /// An empty icon's room before a nested line's content. With the line's gap after it, the
 /// content starts right under its folder's name.
-fn indent() -> gpui::Div {
+pub(super) fn indent() -> gpui::Div {
   div().size(px(ICON_BOX)).flex_none()
-}
-
-/// What an open folder with no rows shows under its name. It isn't a row, so it has no hover and
-/// no click.
-fn no_sessions(colors: Colors) -> AnyElement {
-  sidebar_line()
-    .flex_none()
-    .text_color(colors.text_muted)
-    .child(indent())
-    .child("No sessions")
-    .into_any_element()
 }
 
 /// The colors of a shell's icon in the sidebar.

@@ -10,8 +10,9 @@ use std::time::{Duration, Instant, SystemTime};
 
 use app_state::layout::{Axis, Branch, FolderId, Layout, Node, split_size};
 use app_state::sidebar::{
-  Direction, SidebarFolder, SidebarItem, SidebarKey, find_row, folder_of, moved_folder, moved_row,
-  moved_to_folder, moved_to_new_folder, removed_from_folder, sidebar_items, with_new_folder,
+  Direction, DropSpot, Hover, SidebarFolder, SidebarItem, SidebarKey, drop_spot, dropped, find_row,
+  folder_of, moved_folder, moved_row, moved_to_folder, moved_to_new_folder, removed_from_folder,
+  sidebar_items, with_new_folder,
 };
 use app_state::{
   Entry, Indicator, Terminals, clean_exits, display_name, entry_label, most_urgent, panes_to_close,
@@ -19,9 +20,10 @@ use app_state::{
 };
 use config::{Action, Config, KeyPress, LoadedTheme, ThemeChoice};
 use gpui::{
-  AnyElement, App, Bounds, Context, Entity, FocusHandle, Hsla, KeyDownEvent, MouseButton,
-  MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point, SharedString, Subscription, Task,
-  Window, anchored, canvas, deferred, div, point, prelude::*, px, relative, rgb,
+  AnyElement, App, Bounds, Context, DragMoveEvent, Entity, FocusHandle, Hsla, KeyDownEvent,
+  MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point, SharedString,
+  Subscription, Task, Window, anchored, canvas, deferred, div, point, prelude::*, px, relative,
+  rgb,
 };
 use hc_client::{Client, Notice};
 use hc_proto::types::{
@@ -47,6 +49,7 @@ use ui::tokens::{
 mod actions;
 mod changes;
 mod config_watch;
+mod drag;
 mod files;
 mod panel;
 mod panes;
@@ -59,6 +62,7 @@ mod toolbar;
 
 use changes::GitView;
 use config_watch::ConfigWatch;
+use drag::{DraggedLine, DropEdge, drop_marker, drop_outline};
 use panel::{OutputLook, PANEL_WIDTH, Panel, PanelSwitch, TreeState};
 use resize::{Edge, EdgeDrag};
 use sidebar::visible_keys;
@@ -191,6 +195,8 @@ pub(crate) struct Workspace {
   /// Code editors found at start, best first.
   editors: Vec<Editor>,
   renaming: Option<Renaming>,
+  /// Where the line being dragged in the sidebar would land; shown only while a drag is on.
+  drop_spot: Option<DropSpot>,
   sidebar_open: bool,
   /// How open the sidebar is drawn, 0 to 1, easing toward `sidebar_open`.
   sidebar: Tween,
@@ -368,6 +374,7 @@ impl Workspace {
       _appearance: appearance,
       editors: editors::installed(),
       renaming: None,
+      drop_spot: None,
       sidebar_open: true,
       sidebar: Tween::settled(1.0),
       split_motion: None,

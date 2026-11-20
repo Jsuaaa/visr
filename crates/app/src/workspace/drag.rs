@@ -1,0 +1,149 @@
+//! Dragging a sidebar line: the faded copy that follows the pointer, where the drag aims, and the
+//! drop. A session lands between two lines, into a folder or at the end; a folder lands among the
+//! top-level lines.
+
+use super::*;
+
+/// A sidebar line on its way to a new place: what the drag carries, and the faded copy of the
+/// line that follows the pointer.
+#[derive(Clone)]
+pub(super) struct DraggedLine {
+  pub(super) key: SidebarKey,
+  pub(super) name: SharedString,
+}
+
+/// Which edge of a line a drop marker runs along.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum DropEdge {
+  Top,
+  Bottom,
+}
+
+impl Render for DraggedLine {
+  fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    let colors = Colors::active(cx);
+    div()
+      .h(px(ROW_HEIGHT))
+      .max_w(px(SIDEBAR_WIDTH))
+      .px_2()
+      .flex()
+      .items_center()
+      .rounded_lg()
+      .bg(colors.surface_raised)
+      .border_1()
+      .border_color(colors.surface_hover_strong)
+      .opacity(0.85)
+      .text_size(px(13.0))
+      .text_color(colors.text)
+      .child(div().min_w_0().truncate().child(self.name.clone()))
+  }
+}
+
+impl Workspace {
+  /// Aims the drag by where the pointer is on the line `over`: how far down it, and which line
+  /// it is. Nothing while the pointer is elsewhere, since every line hears every move.
+  pub(super) fn aim_over(
+    &mut self,
+    over: &SidebarKey,
+    event: &DragMoveEvent<DraggedLine>,
+    cx: &mut Context<Self>,
+  ) {
+    let (bounds, pointer) = (event.bounds, event.event.position);
+    if !bounds.contains(&pointer) {
+      return;
+    }
+    let y = (pointer.y - bounds.top()) / bounds.size.height;
+    let dragged = event.drag(cx).key.clone();
+    let items = sidebar_items(&self.layout, &self.terminals);
+    let spot = drop_spot(&items, &dragged, Hover { line: over, y });
+    self.aim(spot, cx);
+  }
+
+  /// Aims the drag at `spot` while the pointer is on the element `event` is for, when letting go
+  /// there would change something.
+  pub(super) fn aim_at(
+    &mut self,
+    spot: DropSpot,
+    event: &DragMoveEvent<DraggedLine>,
+    cx: &mut Context<Self>,
+  ) {
+    if !event.bounds.contains(&event.event.position) {
+      return;
+    }
+    let dragged = event.drag(cx).key.clone();
+    let items = sidebar_items(&self.layout, &self.terminals);
+    let spot = dropped(&items, &dragged, &spot).map(|_| spot);
+    self.aim(spot, cx);
+  }
+
+  /// Sets where the drag would land. It redraws only when that changed, since the pointer moves
+  /// all the time.
+  pub(super) fn aim(&mut self, spot: Option<DropSpot>, cx: &mut Context<Self>) {
+    if self.drop_spot != spot {
+      self.drop_spot = spot;
+      cx.notify();
+    }
+  }
+
+  /// Lets go of the dragged line where it aims. Aimed nowhere, nothing moves.
+  pub(super) fn drop_line(
+    &mut self,
+    dragged: &SidebarKey,
+    window: &mut Window,
+    cx: &mut Context<Self>,
+  ) {
+    let Some(spot) = self.drop_spot.take() else {
+      return;
+    };
+    if self.edit_sidebar(|items| dropped(items, dragged, &spot)) {
+      self.changed(window, cx);
+    } else {
+      cx.notify();
+    }
+  }
+
+  /// Where the drag would land, while one is on. A drag let go where nothing takes it ends
+  /// without telling the sidebar, so its last spot is never shown after it.
+  pub(super) fn shown_drop_spot(&self, cx: &App) -> Option<&DropSpot> {
+    self.drop_spot.as_ref().filter(|_| cx.has_active_drag())
+  }
+}
+
+/// The 2 px line that shows where a drop lands, along one edge of the line it is aimed against.
+/// It starts where the line's icon does, after the indent inside a folder, and is drawn over the
+/// line so nothing moves.
+pub(super) fn drop_marker(edge: DropEdge, in_folder: bool, colors: Colors) -> AnyElement {
+  div()
+    .absolute()
+    .left_0()
+    .right_0()
+    .map(|marker| match edge {
+      DropEdge::Top => marker.top_0(),
+      DropEdge::Bottom => marker.bottom_0(),
+    })
+    .h(px(2.0))
+    .px_2()
+    .flex()
+    .gap_2()
+    .when(in_folder, |marker| marker.child(sidebar::indent()))
+    .child(
+      div()
+        .flex_1()
+        .h_full()
+        .rounded_full()
+        .bg(colors.border_focused),
+    )
+    .into_any_element()
+}
+
+/// The outline a folder's line shows while a session dragged over it would go into the folder.
+/// It is drawn over the line, so nothing moves.
+pub(super) fn drop_outline(colors: Colors) -> AnyElement {
+  div()
+    .absolute()
+    .inset_0()
+    .rounded_lg()
+    .border_1()
+    .border_color(colors.border_focused)
+    .into_any_element()
+}
