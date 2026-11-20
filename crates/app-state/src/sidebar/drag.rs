@@ -1,6 +1,6 @@
 //! Dragging a sidebar line: where the pointer aims it, and the move a drop makes.
 
-use super::{SidebarItem, SidebarKey, folder_at, locate, taken};
+use super::{SidebarFolder, SidebarItem, SidebarKey, folder_at, locate, taken};
 use crate::layout::FolderId;
 
 /// Where a dragged line lands. It is named by the line it is aimed against, so a drop still means
@@ -26,10 +26,11 @@ pub struct Hover<'a> {
 }
 
 /// Where `dragged` lands if let go at `hover`. A row's line splits in halves, before and after
-/// it, and so does any line under a dragged folder. A folder's line takes a dragged row into the
-/// folder, except at its edges: its top quarter is before the folder, and its bottom quarter is
-/// right under it, which is after a collapsed folder and first in an open one. `None` when
-/// letting go there would change nothing.
+/// it, and so does any line under a dragged folder, except the lower half of an open folder's
+/// line, which aims nowhere. A folder's line takes a dragged row into the folder, except at its
+/// edges: its top quarter is before the folder, and its bottom quarter is right under it, which
+/// is after a collapsed folder and first in an open one. `None` when letting go there would
+/// change nothing.
 pub fn drop_spot(
   items: &[SidebarItem],
   dragged: &SidebarKey,
@@ -38,6 +39,11 @@ pub fn drop_spot(
   let spot = match (dragged, hover.line) {
     (SidebarKey::Row(_), SidebarKey::Folder(id)) => folder_spot(items, *id, hover.y)?,
     (_, line) if hover.y < 0.5 => DropSpot::Before(line.clone()),
+    // Right under an open folder's name are its rows, where a folder can't land; the spot after
+    // the whole folder is the next top-level line's.
+    (SidebarKey::Folder(_), SidebarKey::Folder(id)) if !folder(items, *id)?.collapsed => {
+      return None;
+    }
     (_, line) => DropSpot::After(line.clone()),
   };
   dropped(items, dragged, &spot).map(|_| spot)
@@ -60,10 +66,7 @@ pub fn dropped(
 
 /// Where a dragged row aims over folder `id`'s line, `y` of the way down it.
 fn folder_spot(items: &[SidebarItem], id: FolderId, y: f32) -> Option<DropSpot> {
-  let folder = items.iter().find_map(|item| match item {
-    SidebarItem::Folder(folder) if folder.id == id => Some(folder),
-    _ => None,
-  })?;
+  let folder = folder(items, id)?;
   if y < 0.25 {
     return Some(DropSpot::Before(SidebarKey::Folder(id)));
   }
@@ -146,6 +149,14 @@ fn dropped_folder(
   };
   items.insert(at, folder);
   Some(items)
+}
+
+/// Folder `id`, as the sidebar shows it.
+fn folder(items: &[SidebarItem], id: FolderId) -> Option<&SidebarFolder> {
+  items.iter().find_map(|item| match item {
+    SidebarItem::Folder(folder) if folder.id == id => Some(folder),
+    _ => None,
+  })
 }
 
 /// The top-level index of folder `id`.
@@ -346,5 +357,22 @@ mod tests {
       Some(DropSpot::Before(folder_key(1)))
     );
     assert_eq!(drop_spot(&items, &f2, over(&key("t2"), 0.2)), None);
+  }
+
+  #[test]
+  fn a_folder_aims_after_a_collapsed_folder_but_not_after_an_open_one() {
+    // Right under an open folder's name are its rows, or "No sessions", where a folder can't
+    // land: the spot after the whole folder is the next top-level line's.
+    let f2 = folder_key(2);
+    let aim = |folder| {
+      let items = vec![folder, row("t4"), in_folder(2, true, &[])];
+      drop_spot(&items, &f2, over(&folder_key(1), 0.8))
+    };
+    assert_eq!(aim(in_folder(1, false, &["t2"])), None);
+    assert_eq!(aim(in_folder(1, false, &[])), None);
+    assert_eq!(
+      aim(in_folder(1, true, &["t2"])),
+      Some(DropSpot::After(folder_key(1)))
+    );
   }
 }
