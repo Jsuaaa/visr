@@ -15,8 +15,8 @@ use app_state::sidebar::{
   sidebar_items, with_new_folder,
 };
 use app_state::{
-  Entry, Indicator, Terminals, clean_exits, display_name, entry_label, most_urgent, panes_to_close,
-  row_indicator,
+  Entry, Indicator, Terminals, blocked_label, clean_exits, display_name, entry_label, most_urgent,
+  panes_to_close, row_indicator,
 };
 use config::{Action, Config, KeyPress, LoadedTheme, ThemeChoice};
 use gpui::{
@@ -40,9 +40,10 @@ use ui::menu::{MenuColors, menu_item, menu_item_icon, menu_separator};
 use ui::motion::{self, Tween};
 use ui::text_field::{FieldEvent, TextField, TextFieldColors};
 use ui::tokens::{
-  DIVIDER_WIDTH, HEADER_PADDING, ICON_BOX, PANE_BORDER_WIDTH, PANE_CHROME_HEIGHT,
-  PANE_CHROME_WIDTH, PANE_EDGE, PANE_HEADER_HEIGHT, PANE_PADDING_BOTTOM, PANE_PADDING_LEFT,
-  PANE_RADIUS, ROW_HEIGHT, ROW_INSET, TITLEBAR_BUTTON, TITLEBAR_HEIGHT, TITLEBAR_NUDGE, TOGGLE_GAP,
+  DIVIDER_WIDTH, DROP_MARKER_HEIGHT, HEADER_PADDING, ICON_BOX, LINE_GAP, MENU_MAX_WIDTH,
+  MENU_MIN_WIDTH, MENU_WINDOW_MARGIN, PANE_BORDER_WIDTH, PANE_CHROME_HEIGHT, PANE_CHROME_WIDTH,
+  PANE_EDGE, PANE_HEADER_HEIGHT, PANE_PADDING_BOTTOM, PANE_PADDING_LEFT, PANE_RADIUS, ROW_HEIGHT,
+  ROW_INSET, ROW_TEXT_SIZE, TITLEBAR_BUTTON, TITLEBAR_HEIGHT, TITLEBAR_NUDGE, TOGGLE_GAP,
   TOGGLE_LEFT, TOGGLE_TOP, WINDOW_GAP,
 };
 
@@ -58,6 +59,7 @@ mod render;
 mod resize;
 mod session;
 mod sidebar;
+mod sidebar_menu;
 mod toolbar;
 
 use changes::GitView;

@@ -32,7 +32,7 @@ pub enum SidebarKey {
 }
 
 /// The sidebar as shown: every tab, then every loose terminal that isn't leaving, each placed by
-/// its best ranked terminal in `layout.order`. Terminals the order doesn't list go last, in the
+/// its best ranked terminal in the layout's order. Terminals the order doesn't list go last, in the
 /// core's order, at the top level.
 pub fn sidebar_items(layout: &Layout, terminals: &Terminals) -> Vec<SidebarItem> {
   let tabs = layout
@@ -409,10 +409,10 @@ mod tests {
   fn arranging_the_sidebar_as_shown_keeps_its_order() {
     let core = core(&["t1", "t2", "t3"]);
     let mut layout = layout_with(&[], vec![top("t2"), folder(1, true, &["t3"]), top("t1")]);
-    let before = layout.order.clone();
+    let before = layout.slots();
     let items = sidebar_items(&layout, &core);
     layout.arrange(&items);
-    assert_eq!(layout.order, before);
+    assert_eq!(layout.slots(), before);
   }
 
   #[test]
@@ -421,7 +421,7 @@ mod tests {
     let mut layout = layout_with(&[], vec![folder(1, false, &["t9", "t2"])]);
     let items = sidebar_items(&layout, &core);
     layout.arrange(&items);
-    assert_eq!(layout.order, vec![folder(1, false, &["t2"]), top("t1")]);
+    assert_eq!(layout.slots(), vec![folder(1, false, &["t2"]), top("t1")]);
   }
 
   #[test]

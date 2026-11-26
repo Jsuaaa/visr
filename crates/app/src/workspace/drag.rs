@@ -50,7 +50,7 @@ impl Render for DragPreview {
         .border_1()
         .border_color(colors.surface_hover_strong)
         .opacity(0.85)
-        .text_size(px(13.0))
+        .text_size(px(ROW_TEXT_SIZE))
         .text_color(colors.text)
         .child(div().min_w_0().truncate().child(self.name.clone())),
     )
@@ -92,6 +92,14 @@ impl Workspace {
     let items = sidebar_items(&self.layout, &self.terminals);
     let spot = dropped(&items, &dragged, &spot).map(|_| spot);
     self.aim(spot, cx);
+  }
+
+  /// Clears the aim while the pointer is on the element `event` is for, one a drop can't land on,
+  /// so the marker never stays behind on a line the pointer has left.
+  pub(super) fn aim_nowhere(&mut self, event: &DragMoveEvent<DraggedLine>, cx: &mut Context<Self>) {
+    if self.points_at(event) {
+      self.aim(None, cx);
+    }
   }
 
   /// Whether the pointer is on the element `event` is for, where it can be seen. A line scrolled
@@ -161,7 +169,7 @@ pub(super) fn drop_marker(edge: DropEdge, in_folder: bool, colors: Colors) -> An
       DropEdge::Top => marker.top_0(),
       DropEdge::Bottom => marker.bottom_0(),
     })
-    .h(px(2.0))
+    .h(px(DROP_MARKER_HEIGHT))
     .px_2()
     .flex()
     .gap_2()

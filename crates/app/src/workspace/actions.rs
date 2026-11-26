@@ -177,6 +177,22 @@ impl Workspace {
           self.move_to_new_folder(&row, window, cx);
         }
       }
+      Action::NewFolder => {
+        if !self.sidebar_open {
+          self.toggle_sidebar();
+        }
+        self.new_folder(window, cx);
+      }
+      Action::ToggleFolder => {
+        if let Some(id) = self.active_folder() {
+          self.layout.toggle_folder(id);
+        }
+      }
+      Action::RemoveFromFolder => {
+        if let Some(row) = self.active_row() {
+          self.remove_from_folder(&row);
+        }
+      }
     }
     self.changed(window, cx);
   }

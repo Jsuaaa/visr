@@ -12,7 +12,7 @@ pub(crate) fn top(address: &str) -> Slot {
 
 /// A folder named `f{number}`.
 pub(crate) fn folder(number: u32, collapsed: bool, terminals: &[&str]) -> Slot {
-  Slot::Folder(Folder {
+  Slot::Folder {
     id: id(number),
     name: format!("f{number}"),
     collapsed,
@@ -20,7 +20,7 @@ pub(crate) fn folder(number: u32, collapsed: bool, terminals: &[&str]) -> Slot {
       .iter()
       .map(|address| address.to_string())
       .collect(),
-  })
+  }
 }
 
 /// Live terminals in this order, as the core would report them.
@@ -58,6 +58,6 @@ pub(crate) fn layout_with(tabs: &[&str], order: Vec<Slot>) -> Layout {
   for address in tabs {
     layout.new_tab(address);
   }
-  layout.order = order;
+  layout.set_slots(order);
   layout
 }

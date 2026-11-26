@@ -207,6 +207,23 @@ pub fn most_urgent(indicators: impl IntoIterator<Item = Indicator>) -> Indicator
     .unwrap_or(Indicator::Quiet)
 }
 
+/// The most blocked sessions a count shows exactly; more reads as `9+`.
+const BLOCKED_COUNT_CAP: usize = 9;
+
+/// The second cue, besides color, for a group that has terminals needing a person: how many
+/// rows do, as a short label. `None` when none do.
+pub fn blocked_label(indicators: impl IntoIterator<Item = Indicator>) -> Option<String> {
+  let count = indicators
+    .into_iter()
+    .filter(|indicator| *indicator == Indicator::NeedsYou)
+    .count();
+  match count {
+    0 => None,
+    1..=BLOCKED_COUNT_CAP => Some(count.to_string()),
+    _ => Some(format!("{BLOCKED_COUNT_CAP}+")),
+  }
+}
+
 /// The dot a sidebar row shows: a loose terminal's own, or the most urgent of a tab's panes.
 /// A tab's finished panes don't count: they fold away and close right after, so their color
 /// would only flash on the tab.
@@ -267,6 +284,19 @@ mod tests {
       Indicator::Finished
     );
     assert_eq!(urgent(&[]), Indicator::Quiet);
+  }
+
+  #[test]
+  fn blocked_rows_are_counted_in_a_short_label() {
+    let label = |dots: &[Indicator]| blocked_label(dots.iter().copied());
+    assert_eq!(label(&[]), None);
+    assert_eq!(label(&[Indicator::Working, Indicator::Done]), None);
+    assert_eq!(
+      label(&[Indicator::NeedsYou, Indicator::Quiet]).as_deref(),
+      Some("1")
+    );
+    assert_eq!(label(&[Indicator::NeedsYou; 9]).as_deref(), Some("9"));
+    assert_eq!(label(&[Indicator::NeedsYou; 10]).as_deref(), Some("9+"));
   }
 
   #[test]

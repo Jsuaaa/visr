@@ -249,27 +249,38 @@ impl fmt::Display for FolderId {
 }
 
 /// A named group of sidebar rows, kept in Visr's layout only.
+///
+/// Its terminals also appear in `Layout::order`, starting at `position`, so a build that doesn't
+/// know folders still reads a sensible flat order and ignores the folders.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Folder {
   pub id: FolderId,
   pub name: String,
   #[serde(default)]
   pub collapsed: bool,
+  /// Where in `Layout::order` its terminals start, which is also where an empty folder sits.
+  /// Rewritten on every edit, so callers don't set it.
+  #[serde(default)]
+  pub position: usize,
   /// The terminals of its rows, in the order shown.
   #[serde(default)]
   pub terminals: Vec<String>,
 }
 
-/// One place in the sidebar's arranged order.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum Slot {
-  /// A terminal outside any folder; layouts saved before folders hold only these.
+/// One place in the sidebar's arranged order, with a folder's terminals nested in it. This is the
+/// shape the layout is edited in; `Layout::set_slots` flattens it into `order` and `folders`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Slot {
   Terminal(String),
-  Folder(Folder),
+  Folder {
+    id: FolderId,
+    name: String,
+    collapsed: bool,
+    terminals: Vec<String>,
+  },
 }
 
-/// One line `order` lists, as `Layout::places` reads it.
+/// One line the layout lists, as `Layout::places` reads it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Place<'a> {
   Folder(&'a Folder),
@@ -284,9 +295,14 @@ pub(crate) enum Place<'a> {
 pub struct Layout {
   pub tabs: Vec<Tab>,
   pub active_tab: usize,
-  /// The sidebar's order as the user arranged it; terminals missing from it go last.
+  /// The sidebar's order as the user arranged it, folder terminals included at their folder's
+  /// position; terminals missing from it go last. Builds from before folders read only this.
   #[serde(default)]
-  pub order: Vec<Slot>,
+  pub order: Vec<String>,
+  /// The sidebar's folders. Builds from before folders ignore this and a layout saved by them has
+  /// none.
+  #[serde(default)]
+  pub folders: Vec<Folder>,
   /// The user's names for terminals shown in no tab, by address.
   #[serde(default)]
   pub names: BTreeMap<String, String>,
@@ -387,62 +403,108 @@ impl Layout {
     let Some((after, folder)) = last else {
       return;
     };
-    let slot = |known: &Slot| matches!(known, Slot::Terminal(a) if *a == after);
+    let mut slots = self.slots();
     match folder {
       None => {
-        if let Some(index) = self.order.iter().position(slot) {
-          self
-            .order
-            .insert(index + 1, Slot::Terminal(terminal.into()));
+        let slot = |known: &Slot| matches!(known, Slot::Terminal(a) if *a == after);
+        if let Some(index) = slots.iter().position(slot) {
+          slots.insert(index + 1, Slot::Terminal(terminal.into()));
         }
       }
       Some(id) => {
-        for known in &mut self.order {
-          if let Slot::Folder(folder) = known
-            && folder.id == id
-            && let Some(index) = folder.terminals.iter().position(|a| *a == after)
+        for known in &mut slots {
+          if let Slot::Folder {
+            id: known_id,
+            terminals,
+            ..
+          } = known
+            && *known_id == id
+            && let Some(index) = terminals.iter().position(|a| *a == after)
           {
-            folder.terminals.insert(index + 1, terminal.into());
+            terminals.insert(index + 1, terminal.into());
           }
         }
       }
     }
+    self.set_slots(slots);
   }
 
-  /// Drops every listing of `terminal` from `order`; folders stay even when empty.
+  /// Drops every listing of `terminal`; folders stay even when empty.
   fn unlist(&mut self, terminal: &str) {
-    self
-      .order
-      .retain(|slot| !matches!(slot, Slot::Terminal(known) if known == terminal));
-    for slot in &mut self.order {
-      if let Slot::Folder(folder) = slot {
-        folder.terminals.retain(|known| known != terminal);
+    let mut slots = self.slots();
+    slots.retain(|slot| !matches!(slot, Slot::Terminal(known) if known == terminal));
+    for slot in &mut slots {
+      if let Slot::Folder { terminals, .. } = slot {
+        terminals.retain(|known| known != terminal);
+      }
+    }
+    self.set_slots(slots);
+  }
+
+  /// The sidebar order as nested slots, healed the way `places` reads it.
+  pub(crate) fn slots(&self) -> Vec<Slot> {
+    let mut slots = Vec::new();
+    for place in self.places() {
+      match (place, slots.last_mut()) {
+        (Place::Folder(folder), _) => slots.push(Slot::Folder {
+          id: folder.id,
+          name: folder.name.clone(),
+          collapsed: folder.collapsed,
+          terminals: Vec::new(),
+        }),
+        (
+          Place::Terminal {
+            address,
+            folder: Some(_),
+          },
+          Some(Slot::Folder { terminals, .. }),
+        ) => terminals.push(address.to_string()),
+        (Place::Terminal { address, .. }, _) => slots.push(Slot::Terminal(address.to_string())),
+      }
+    }
+    slots
+  }
+
+  /// Writes slots to `order` and `folders`, so both views agree.
+  pub(crate) fn set_slots(&mut self, slots: Vec<Slot>) {
+    self.order.clear();
+    self.folders.clear();
+    for slot in slots {
+      match slot {
+        Slot::Terminal(address) => self.order.push(address),
+        Slot::Folder {
+          id,
+          name,
+          collapsed,
+          terminals,
+        } => {
+          let position = self.order.len();
+          self.order.extend(terminals.iter().cloned());
+          self.folders.push(Folder {
+            id,
+            name,
+            collapsed,
+            position,
+            terminals,
+          });
+        }
       }
     }
   }
 
   /// The folder with this id.
   pub fn folder(&self, id: FolderId) -> Option<&Folder> {
-    self.order.iter().find_map(|slot| match slot {
-      Slot::Folder(folder) if folder.id == id => Some(folder),
-      _ => None,
-    })
+    self.folders.iter().find(|folder| folder.id == id)
   }
 
   fn folder_mut(&mut self, id: FolderId) -> Option<&mut Folder> {
-    self.order.iter_mut().find_map(|slot| match slot {
-      Slot::Folder(folder) if folder.id == id => Some(folder),
-      _ => None,
-    })
+    self.folders.iter_mut().find(|folder| folder.id == id)
   }
 
-  /// One more than the largest id in `order`, or 1 when there is none.
+  /// One more than the largest folder id, or 1 when there is none.
   pub fn next_folder_id(&self) -> FolderId {
-    let largest = self.order.iter().filter_map(|slot| match slot {
-      Slot::Folder(folder) => Some(folder.id.0),
-      Slot::Terminal(_) => None,
-    });
-    FolderId(largest.max().map_or(1, |largest| largest + 1))
+    let largest = self.folders.iter().map(|folder| folder.id.0).max();
+    FolderId(largest.map_or(1, |largest| largest + 1))
   }
 
   /// Trimmed; a blank name keeps the current one, because a folder always has a name.
@@ -462,19 +524,23 @@ impl Layout {
 
   /// Its terminals take its place at the top level, in their order. No terminal is affected.
   pub fn delete_folder(&mut self, id: FolderId) {
-    self.order = std::mem::take(&mut self.order)
+    let slots = self
+      .slots()
       .into_iter()
       .flat_map(|slot| match slot {
-        Slot::Folder(folder) if folder.id == id => {
-          folder.terminals.into_iter().map(Slot::Terminal).collect()
-        }
+        Slot::Folder {
+          id: known,
+          terminals,
+          ..
+        } if known == id => terminals.into_iter().map(Slot::Terminal).collect(),
         other => vec![other],
       })
       .collect();
+    self.set_slots(slots);
   }
 
-  /// Writes the sidebar as shown back to `order`: one slot per terminal, folders with their rows.
-  /// Terminals the sidebar doesn't show drop out.
+  /// Writes the sidebar as shown back to `order` and `folders`: one place per terminal, folders
+  /// with their rows. Terminals the sidebar doesn't show drop out.
   pub fn arrange(&mut self, items: &[SidebarItem]) {
     let addresses = |entry: &Entry| {
       entry
@@ -483,18 +549,19 @@ impl Layout {
         .map(str::to_string)
         .collect::<Vec<_>>()
     };
-    self.order = items
+    let slots = items
       .iter()
       .flat_map(|item| match item {
         SidebarItem::Row(entry) => addresses(entry).into_iter().map(Slot::Terminal).collect(),
-        SidebarItem::Folder(folder) => vec![Slot::Folder(Folder {
+        SidebarItem::Folder(folder) => vec![Slot::Folder {
           id: folder.id,
           name: folder.name.clone(),
           collapsed: folder.collapsed,
           terminals: folder.rows.iter().flat_map(addresses).collect(),
-        })],
+        }],
       })
       .collect();
+    self.set_slots(slots);
   }
 
   /// Stops showing the focused pane; a tab left empty closes.
@@ -517,24 +584,47 @@ impl Layout {
     }
   }
 
-  /// Every place `order` lists, depth first: a folder, then its terminals. A terminal listed
-  /// again later keeps its first place.
+  /// Every place the layout lists, depth first: a folder, then its terminals. A folder comes
+  /// before the `order` entry at its `position`, and `order` entries in the range its terminals
+  /// cover belong to it. A terminal listed again later keeps its first place, and a repeated
+  /// folder id is skipped.
   pub(crate) fn places(&self) -> Vec<Place<'_>> {
+    fn push_folder<'a>(places: &mut Vec<Place<'a>>, folder: &'a Folder) {
+      places.push(Place::Folder(folder));
+      places.extend(folder.terminals.iter().map(|address| Place::Terminal {
+        address,
+        folder: Some(folder.id),
+      }));
+    }
+
+    let mut folders: Vec<&Folder> = Vec::with_capacity(self.folders.len());
+    for folder in &self.folders {
+      if !folders.iter().any(|known| known.id == folder.id) {
+        folders.push(folder);
+      }
+    }
+    folders.sort_by_key(|folder| folder.position);
+    let in_folder = |index: usize, address: &str| {
+      folders.iter().any(|folder| {
+        (folder.position..folder.position + folder.terminals.len()).contains(&index)
+          && folder.terminals.iter().any(|known| known == address)
+      })
+    };
     let mut places = Vec::new();
-    for slot in &self.order {
-      match slot {
-        Slot::Terminal(address) => places.push(Place::Terminal {
+    let mut pending = folders.iter().copied().peekable();
+    for (index, address) in self.order.iter().enumerate() {
+      while let Some(folder) = pending.next_if(|folder| folder.position <= index) {
+        push_folder(&mut places, folder);
+      }
+      if !in_folder(index, address) {
+        places.push(Place::Terminal {
           address,
           folder: None,
-        }),
-        Slot::Folder(folder) => {
-          places.push(Place::Folder(folder));
-          places.extend(folder.terminals.iter().map(|address| Place::Terminal {
-            address,
-            folder: Some(folder.id),
-          }));
-        }
+        });
       }
+    }
+    for folder in pending {
+      push_folder(&mut places, folder);
     }
     let mut seen: Vec<&str> = Vec::new();
     places.retain(|place| match place {
@@ -621,14 +711,21 @@ impl Layout {
     self.new_tab(terminal);
     let Some(id) = folder else { return };
     self.unlist(terminal);
-    for slot in &mut self.order {
-      if let Slot::Folder(folder) = slot
-        && folder.id == id
+    let mut slots = self.slots();
+    for slot in &mut slots {
+      if let Slot::Folder {
+        id: known,
+        terminals,
+        collapsed,
+        ..
+      } = slot
+        && *known == id
       {
-        folder.terminals.push(terminal.into());
-        folder.collapsed = false;
+        terminals.push(terminal.into());
+        *collapsed = false;
       }
     }
+    self.set_slots(slots);
   }
 
   /// The folder a terminal is listed in; `None` at the top level or when unlisted.
